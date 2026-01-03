@@ -1,0 +1,146 @@
+{
+  "translation": {
+    "quickEdit": "Édition rapide",
+    "videoPreview": "Aperçu de la vidéo",
+    "trim": "Rogner",
+    "split": "Diviser",
+    "cut": "Couper",
+    "more": "Plus",
+    "edit": "Modifier",
+    "effects": "Effets",
+    "editYourVideo": "Modifier votre vidéo",
+    "seeAll": "Tout voir",
+
+    "home": "Accueil",
+    "projects": "Projets",
+    "templates": "Modèles",
+    "profile": "Profil",
+    "uploadVideo": "Téléverser une vidéo",
+    "uploadVideos": "Téléverser des vidéos",
+    "uploadYourVideo": "Téléversez votre vidéo",
+    "uploadMultiple": "Téléverser plusieurs fichiers",
+    "continueDraft": "Continuer le brouillon",
+    "pasteCloudLink": "Coller un lien cloud",
+    "tapToUpload": "Appuyez pour téléverser",
+    "addMore": "Ajouter d’autres vidéos",
+
+    "uploadDescription": "Ajoutez et modifiez vos propres clips vidéo",
+
+    "describeWhatYouWantToDo": "Décrivez ce que vous souhaitez que nous fassions avec ces vidéos…",
+    "send": "Envoyer",
+
+    "filesSelected": "Fichiers sélectionnés",
+    "fileSelected_one": "{{count}} fichier sélectionné",
+    "fileSelected_other": "{{count}} fichiers sélectionnés",
+    "videoDescription": "Ajoutez une description pour cette vidéo…",
+    "globalDescription": "Décrivez ce que vous souhaitez que nous fassions avec ces vidéos…",
+    "continue": "Continuer",
+    "back": "Retour",
+
+    "selectStyle": "Sélectionner un style",
+    "chooseStyle": "Choisissez un style pour votre vidéo",
+    "applyStyle": "Appliquer le style",
+
+    "deliveryTime": "Délai de livraison",
+    "chooseDelivery": "Choisissez la vitesse de livraison",
+    "standard": "Standard",
+    "fast": "Rapide",
+    "rush": "Urgent",
+
+    "extras": "Options supplémentaires",
+    "chooseExtras": "Ajoutez des options à votre vidéo",
+    "subtitlesBasic": "Sous-titres basiques",
+    "subtitlesPro": "Sous-titres professionnels",
+    "colorGrading": "Étalonnage des couleurs",
+    "musicLicense": "Licence musicale",
+
+    "submit": "Valider",
+    "generalDescription": "Description générale",
+    "generalDescriptionPlaceholder": "Ajoutez une description globale pour votre projet…",
+
+    "reviewOrder": "Vérifier la commande",
+    "reviewOrderDesc": "Vérifiez votre commande avant validation",
+    "videos": "Vidéos",
+    "style": "Style",
+    "delivery": "Livraison",
+    "total": "Total",
+    "submitOrder": "Valider la commande",
+
+    "welcomeBack": "Bon retour",
+    "loginToContinue": "Connectez-vous pour continuer",
+    "usernameOrEmail": "Nom d’utilisateur ou e-mail",
+    "password": "Mot de passe",
+    "login": "Connexion",
+    "loginError": "Échec de la connexion. Veuillez réessayer.",
+
+    "forgotPassword": "Mot de passe oublié ?",
+    "forgotPasswordDesc": "Entrez votre e-mail et nous vous enverrons un lien de réinitialisation.",
+    "email": "E-mail",
+    "sendResetLink": "Envoyer le lien",
+    "emailSent": "E-mail envoyé",
+    "checkEmail": "Veuillez vérifier votre e-mail pour le lien de réinitialisation.",
+    "backToLogin": "Retour à la connexion",
+    "resetError": "Impossible d’envoyer l’e-mail. Veuillez réessayer.",
+
+    "editName": "Modifier le nom",
+    "changePassword": "Modifier le mot de passe",
+    "logout": "Déconnexion",
+    "fullName": "Nom complet",
+    "enterName": "Entrez votre nom",
+    "save": "Enregistrer",
+    "nameUpdated": "Nom mis à jour avec succès",
+
+    "currentPassword": "Mot de passe actuel",
+    "newPassword": "Nouveau mot de passe",
+    "confirmPassword": "Confirmer le mot de passe",
+    "enterCurrentPassword": "Entrez le mot de passe actuel",
+    "enterNewPassword": "Entrez le nouveau mot de passe",
+    "confirmNewPassword": "Confirmez le nouveau mot de passe",
+
+    "passwordChanged": "Mot de passe modifié avec succès",
+    "passwordMismatch": "Les mots de passe ne correspondent pas",
+    "passwordTooShort": "Le mot de passe doit contenir au moins 6 caractères",
+
+    "settings": "Paramètres",
+    "privacy": "Confidentialité",
+    "help": "Aide & support",
+
+    "createAccount": "Créer un compte",
+    "registerToContinue": "Inscrivez-vous pour commencer",
+    "username": "Nom d’utilisateur",
+    "register": "S’inscrire",
+    "registerError": "Échec de l’inscription. Veuillez réessayer.",
+    "noAccount": "Vous n’avez pas de compte ?",
+    "or": "ou",
+
+    "usernameExists": "Ce nom d’utilisateur existe déjà",
+    "emailExists": "Cet e-mail existe déjà",
+    "googleLoginError": "La connexion Google a échoué. Veuillez réessayer.",
+    "signingIn": "Connexion en cours…",
+    "continueWithGoogle": "Continuer avec Google",
+
+    "loginRequired": "Veuillez vous connecter pour continuer",
+    "loginToContinueOrder": "Connectez-vous pour valider votre commande",
+
+    "myProjects": "Mes projets",
+    "loading": "Chargement…",
+    "loginToSeeProjects": "Connectez-vous pour voir vos projets",
+    "noProjects": "Aucun projet pour le moment",
+    "noProjectsDesc": "Vos commandes apparaîtront ici",
+
+    "orderDate": "Date de commande",
+    "progress": "Avancement",
+
+    "sendMoreInfo": "Envoyer plus d’informations",
+    "typeMessage": "Écrivez votre message…",
+    "messageSent": "Message envoyé avec succès",
+    "messageFailed": "Échec de l’envoi du message",
+
+    "downloadFiles": "Télécharger les fichiers",
+    "downloadStarting": "Téléchargement en cours…",
+
+    "messages": "Messages",
+    "noMessages": "Aucun message pour le moment",
+    "noDownload": "Aucun fichier disponible au téléchargement"
+  }
+}

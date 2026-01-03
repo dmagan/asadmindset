@@ -1,0 +1,146 @@
+{
+  "translation": {
+    "quickEdit": "Modificaziun rapida",
+    "videoPreview": "Prevista dal video",
+    "trim": "Tagliar",
+    "split": "Separar",
+    "cut": "Tagliar",
+    "more": "Dapli",
+    "edit": "Modifitgar",
+    "effects": "Effets",
+    "editYourVideo": "Modifitgescha tes video",
+    "seeAll": "Vesair tut",
+
+    "home": "Chasa",
+    "projects": "Projects",
+    "templates": "Models",
+    "profile": "Profil",
+    "uploadVideo": "Chargiar video",
+    "uploadVideos": "Chargiar videos",
+    "uploadYourVideo": "Chargia tes video",
+    "uploadMultiple": "Chargiar plirs datotecas",
+    "continueDraft": "Cuntinuar la bozza",
+    "pasteCloudLink": "Encollar colliaziun cloud",
+    "tapToUpload": "Tippa per chargiar",
+    "addMore": "Agiuntar ulteriurs videos",
+
+    "uploadDescription": "Agiunta e modifitga tes clips video",
+
+    "describeWhatYouWantToDo": "Descriva tge che nus duain far cun quests videos…",
+    "send": "Trametter",
+
+    "filesSelected": "Datotecas selecziunadas",
+    "fileSelected_one": "{{count}} datoteca selecziunada",
+    "fileSelected_other": "{{count}} datotecas selecziunadas",
+    "videoDescription": "Agiunta ina descripziun per quest video…",
+    "globalDescription": "Descriva tge che nus duain far cun quests videos…",
+    "continue": "Cuntinuar",
+    "back": "Enavos",
+
+    "selectStyle": "Tscherner stil",
+    "chooseStyle": "Tscherna in stil per tes video",
+    "applyStyle": "Applitgar stil",
+
+    "deliveryTime": "Temp da consegna",
+    "chooseDelivery": "Tscherna la sveltezza da consegna",
+    "standard": "Standard",
+    "fast": "Svelt",
+    "rush": "Urgent",
+
+    "extras": "Extras",
+    "chooseExtras": "Agiuntar funcziuns supplementaras al video",
+    "subtitlesBasic": "Sut-titels basics",
+    "subtitlesPro": "Sut-titels professiunals",
+    "colorGrading": "Correcziun da colurs",
+    "musicLicense": "Licenza musicala",
+
+    "submit": "Confermar",
+    "generalDescription": "Descripziun generala",
+    "generalDescriptionPlaceholder": "Agiunta ina descripziun generala per tes project…",
+
+    "reviewOrder": "Controllar l’ordinaziun",
+    "reviewOrderDesc": "Controllescha tia ordinaziun avant la conferma",
+    "videos": "Videos",
+    "style": "Stil",
+    "delivery": "Consegna",
+    "total": "Total",
+    "submitOrder": "Confermar l’ordinaziun",
+
+    "welcomeBack": "Bainvegni anavos",
+    "loginToContinue": "S’annunzia per cuntinuar",
+    "usernameOrEmail": "Num d’utilisader u e-mail",
+    "password": "Pled-clav",
+    "login": "Annunziar",
+    "loginError": "Annunzia betg reussida. Emprova puspè.",
+
+    "forgotPassword": "Emblidà il pled-clav?",
+    "forgotPasswordDesc": "Endatescha tia e-mail e nus trametain ina colliaziun per restaurar il pled-clav.",
+    "email": "E-mail",
+    "sendResetLink": "Trametter colliaziun",
+    "emailSent": "E-mail tramessa",
+    "checkEmail": "Controllescha tia e-mail per la colliaziun da restauraziun.",
+    "backToLogin": "Enavos a l’annunzia",
+    "resetError": "Betg pussaivel da trametter l’e-mail. Emprova puspè.",
+
+    "editName": "Modifitgar il num",
+    "changePassword": "Midar il pled-clav",
+    "logout": "Sortir",
+    "fullName": "Num cumplet",
+    "enterName": "Endatescha tes num",
+    "save": "Memorisar",
+    "nameUpdated": "Num actualisà cun success",
+
+    "currentPassword": "Pled-clav actual",
+    "newPassword": "Nov pled-clav",
+    "confirmPassword": "Confermar il pled-clav",
+    "enterCurrentPassword": "Endatescha il pled-clav actual",
+    "enterNewPassword": "Endatescha il nov pled-clav",
+    "confirmNewPassword": "Conferma il nov pled-clav",
+
+    "passwordChanged": "Pled-clav midà cun success",
+    "passwordMismatch": "Ils pleds-clav na correspundan betg",
+    "passwordTooShort": "Il pled-clav sto avair almain 6 caracters",
+
+    "settings": "Configuraziuns",
+    "privacy": "Protecziun da datas",
+    "help": "Agid & sustegn",
+
+    "createAccount": "Crear conto",
+    "registerToContinue": "S’annunzia per cumenzar",
+    "username": "Num d’utilisader",
+    "register": "Registrar",
+    "registerError": "Registraziun betg reussida. Emprova puspè.",
+    "noAccount": "Anc nagin conto?",
+    "or": "u",
+
+    "usernameExists": "Il num d’utilisader exista gia",
+    "emailExists": "L’e-mail exista gia",
+    "googleLoginError": "Annunzia cun Google betg reussida. Emprova puspè.",
+    "signingIn": "Annunzia en curs…",
+    "continueWithGoogle": "Cuntinuar cun Google",
+
+    "loginRequired": "Per plaschair s’annunzia per cuntinuar",
+    "loginToContinueOrder": "S’annunzia per confermar tia ordinaziun",
+
+    "myProjects": "Mes projects",
+    "loading": "Chargiament…",
+    "loginToSeeProjects": "S’annunzia per vesair tes projects",
+    "noProjects": "Anc nagins projects",
+    "noProjectsDesc": "Tias ordinaziuns cumparan qua",
+
+    "orderDate": "Data da l’ordinaziun",
+    "progress": "Progress",
+
+    "sendMoreInfo": "Trametter dapli infurmaziuns",
+    "typeMessage": "Scriva tes messadi…",
+    "messageSent": "Messadi tramess cun success",
+    "messageFailed": "Tramissiun dal messadi betg reussida",
+
+    "downloadFiles": "Telechargiar datotecas",
+    "downloadStarting": "Telechargiament cumenza…",
+
+    "messages": "Messadis",
+    "noMessages": "Anc nagins messadis",
+    "noDownload": "Naginas datotecas disponiblas per telechargiar"
+  }
+}

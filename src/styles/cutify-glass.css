@@ -1,0 +1,1846 @@
+html, body {
+  overscroll-behavior: none;
+  overflow: hidden;
+  position: fixed;
+  width: 100%;
+  height: 100%;
+}
+
+.cutify-app {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+        /* Language Switcher */
+        .language-switcher {
+          position: absolute;
+          top: 60px;
+          right: 20px;
+          display: flex;
+          gap: 8px;
+          z-index: 1000;
+          background: rgba(255, 255, 255, 0.1);
+          backdrop-filter: blur(10px);
+          border-radius: 20px;
+          padding: 4px;
+        }
+
+        .language-switcher button {
+          background: transparent;
+          border: none;
+          color: rgba(255, 255, 255, 0.6);
+          padding: 6px 12px;
+          border-radius: 16px;
+          font-size: 12px;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 0.3s;
+        }
+
+        .language-switcher button.active {
+          background: rgba(255, 255, 255, 0.2);
+          color: white;
+        }
+
+
+
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+
+        /* Disable text selection - App mode */
+* {
+  -webkit-user-select: none; /* Safari */
+  -ms-user-select: none;     /* IE */
+  user-select: none;         /* Standard */
+  -webkit-tap-highlight-color: transparent;
+}
+
+
+        * {
+          margin: 0;
+          padding: 0;
+          box-sizing: border-box;
+        }
+
+        .cutify-app {
+          min-height: 100vh;
+          background: #000;
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          padding: 40px 20px;
+          font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter', sans-serif;
+        }
+
+        .phone-frame {
+          width: 100%;
+          max-width: 393px;
+          height: 852px;
+          border-radius: 55px;
+          position: relative;
+          overflow: hidden;
+          box-shadow: 
+            0 0 0 1px rgba(255, 255, 255, 0.1),
+            0 0 0 11px #1a1a1a,
+            0 0 0 13px #2d2d2d,
+            0 0 0 14px #1a1a1a,
+            0 25px 80px rgba(0, 0, 0, 0.8);
+        }
+
+        /* Background Image - کلید اصلی نمایش شیشه‌ای */
+        .bg-image {
+          position: absolute;
+          inset: 0;
+           background-image: url('../assets/background.jpg');
+          background-size: cover;
+          background-position: center;
+          z-index: 0;
+        }
+
+        .bg-overlay {
+          position: absolute;
+          inset: 0;
+          background: rgba(0, 0, 0, 0.19);
+          z-index: 1;
+        }
+
+        /* Dynamic Island */
+        .dynamic-island {
+          position: absolute;
+          top: 12px;
+          left: 50%;
+          transform: translateX(-50%);
+          width: 126px;
+          height: 37px;
+          background: #000;
+          border-radius: 24px;
+          z-index: 100;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .island-content {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+        }
+
+        .island-dot {
+          width: 12px;
+          height: 12px;
+          background: #1a1a2e;
+          border-radius: 50%;
+        }
+
+        .island-camera {
+          width: 12px;
+          height: 12px;
+          background: radial-gradient(circle at 30% 30%, #1e3a5f, #0a1628);
+          border-radius: 50%;
+        }
+
+        .status-bar {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding: 16px 32px 8px;
+          position: relative;
+          z-index: 50;
+        }
+
+        .time {
+          font-size: 16px;
+          font-weight: 600;
+          color: white;
+        }
+
+        .status-icons {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+        }
+
+        .battery-ios {
+          display: flex;
+          align-items: center;
+        }
+
+        .battery-fill-ios {
+          width: 22px;
+          height: 11px;
+          background: white;
+          border-radius: 2.5px;
+          border: 1px solid rgba(255, 255, 255, 0.4);
+          position: relative;
+        }
+
+        .battery-fill-ios::after {
+          content: '';
+          position: absolute;
+          inset: 2px;
+          background: linear-gradient(90deg, #34c759, #30d158);
+          border-radius: 1px;
+        }
+
+        .battery-cap {
+          width: 2px;
+          height: 5px;
+          background: rgba(255, 255, 255, 0.5);
+          border-radius: 0 1px 1px 0;
+          margin-left: 1px;
+        }
+
+.content {
+  padding: 0px 20px 30px;
+          height: calc(100% - 80px);
+          overflow-y: auto;
+          overflow-x: hidden;
+          scrollbar-width: none;
+          position: relative;
+          z-index: 10;
+        }
+
+        .content::-webkit-scrollbar {
+          display: none;
+        }
+
+        /* ==================== */
+        /* GLASS SEARCH BAR */
+        /* ==================== */
+        .search-bar-glass {
+          display: flex;
+          align-items: center;
+          padding: 14px 18px;
+          margin-bottom: 24px;
+          border-radius: 16px;
+          
+          /* افکت شیشه‌ای اصلی */
+          background: rgba(255, 255, 255, 0.15);
+          backdrop-filter: blur(40px) saturate(180%);
+          
+          /* حاشیه نوری */
+          border: 1px solid rgba(255, 255, 255, 0.25);
+          box-shadow: 
+            0 8px 32px rgba(0, 0, 0, 0.2),
+            inset 0 1px 0 rgba(255, 255, 255, 0.3);
+        }
+
+        .search-bar-glass span {
+          flex: 1;
+          color: rgba(255, 255, 255, 0.7);
+          font-size: 17px;
+          font-weight: 400;
+          margin-left: 10px;
+        }
+
+        .search-icon, .mic-icon {
+          color: rgba(255, 255, 255, 0.7);
+        }
+
+        .logo {
+          margin-top: 30px;
+          display: flex;
+          justify-content: center;
+          margin-bottom: 24px;
+        }
+
+        .logo-container {
+          display: flex;
+          align-items: center;
+          position: relative;
+        }
+
+        .scissors-icon {
+          color: white;
+          transform: rotate(-45deg);
+          filter: drop-shadow(0 0 20px rgba(255, 255, 255, 0.5));
+        }
+
+        .logo-text {
+          font-size: 42px;
+          font-weight: 700;
+          color: white;
+          letter-spacing: -2px;
+          text-shadow: 0 0 40px rgba(255, 255, 255, 0.4);
+        }
+
+        .play-badge {
+          position: absolute;
+          right: -8px;
+          top: 2px;
+          background: #ff0000;
+          border-radius: 4px;
+          padding: 3px 5px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          box-shadow: 0 2px 8px rgba(255, 0, 0, 0.5);
+        }
+
+        /* ==================== */
+        /* MAIN GLASS CARD */
+        /* ==================== */
+        .quick-edit-card-glass {
+          position: relative;
+          padding: 20px;
+          margin-bottom: 28px;
+          border-radius: 28px;
+          
+          /* افکت شیشه‌ای قوی */
+          background: rgba(255, 255, 255, 0.116);
+          backdrop-filter: blur(4px) saturate(100%);
+          -webkit-backdrop-filter: blur(4px) saturate(100%);
+          
+          /* حاشیه و سایه */
+          border: 1px solid rgba(255, 255, 255, 0.466);
+          box-shadow: 
+            0 20px 60px rgba(0, 0, 0, 0.3),
+            inset 0 1px 0 rgba(255, 255, 255, 0.25),
+            inset 0 -1px 0 rgba(255, 255, 255, 0.1);
+          
+          overflow: hidden;
+        }
+
+        /* خط نوری بالای کارت */
+        .quick-edit-card-glass::before {
+          content: '';
+          position: absolute;
+          top: 0;
+          left: 20px;
+          right: 20px;
+          height: 1px;
+          background: linear-gradient(90deg, 
+            transparent 0%, 
+            rgba(255, 255, 255, 0.1) 50%, 
+            transparent 100%
+          );
+        }
+
+        .card-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 16px;
+        }
+
+        .card-header h2 {
+          color: white;
+          font-size: 22px;
+          font-weight: 600;
+        }
+
+        .pen-button-glass {
+          width: 38px;
+          height: 38px;
+          border-radius: 12px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: white;
+          cursor: pointer;
+          transition: all 0.3s;
+          
+          /* دکمه شیشه‌ای */
+          background: rgba(255, 255, 255, 0.15);
+          backdrop-filter: blur(20px);
+          border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .pen-button-glass:hover {
+          background: rgba(255, 255, 255, 0.25);
+          transform: scale(1.05);
+        }
+
+        .video-preview-glass {
+          position: relative;
+          border-radius: 18px;
+          overflow: hidden;
+          margin-bottom: 16px;
+          box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
+        }
+
+        .video-preview-glass img {
+          width: 100%;
+          height: 200px;
+          object-fit: cover;
+        }
+
+        .video-overlay-glass {
+          position: absolute;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 44px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: rgba(0, 0, 0, 0.2);
+          opacity: 0;
+          transition: opacity 0.3s;
+        }
+
+        .video-preview-glass:hover .video-overlay-glass {
+          opacity: 1;
+        }
+
+        .play-button-glass {
+          background: none;
+          border: none;
+          cursor: pointer;
+          transition: transform 0.2s;
+        }
+
+        .play-button-glass:hover {
+          transform: scale(1.1);
+        }
+
+        /* دکمه پلی شیشه‌ای */
+        .play-btn-inner {
+          width: 72px;
+          height: 72px;
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: white;
+          
+          background: rgba(255, 255, 255, 0.2);
+          backdrop-filter: blur(30px);
+          border: 1px solid rgba(255, 255, 255, 0.3);
+          box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+
+        .pause-icon {
+          display: flex;
+          gap: 5px;
+        }
+
+        .pause-icon span {
+          width: 5px;
+          height: 22px;
+          background: white;
+          border-radius: 3px;
+        }
+
+        .progress-container-ios {
+          position: absolute;
+          bottom: 0;
+          left: 0;
+          right: 0;
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          padding: 12px 14px;
+          background: linear-gradient(transparent, rgba(0, 0, 0, 0.7));
+        }
+
+        .time-label {
+          color: white;
+          font-size: 12px;
+          font-weight: 500;
+          min-width: 32px;
+          font-variant-numeric: tabular-nums;
+        }
+
+        .progress-track {
+          flex: 1;
+          height: 4px;
+          background: rgba(255, 255, 255, 0.3);
+          border-radius: 2px;
+          position: relative;
+        }
+
+        .progress-fill-ios {
+          height: 100%;
+          background: white;
+          border-radius: 2px;
+          box-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+        }
+
+        .progress-thumb {
+          position: absolute;
+          top: 50%;
+          transform: translate(-50%, -50%);
+          width: 14px;
+          height: 14px;
+          background: white;
+          border-radius: 50%;
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+        }
+
+        /* ==================== */
+        /* ACTION PILLS GLASS */
+        /* ==================== */
+        .action-buttons-ios {
+          display: flex;
+          gap: 10px;
+          margin-bottom: 16px;
+        }
+
+        .action-pill {
+          flex: 1;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 6px;
+          padding: 12px 8px;
+          color: white;
+          font-size: 13px;
+          font-weight: 500;
+          cursor: pointer;
+          transition: all 0.25s;
+          border-radius: 14px;
+          
+          /* دکمه‌های شیشه‌ای */
+          background: rgba(255, 255, 255, 0.1);
+          backdrop-filter: blur(20px);
+          border: 1px solid rgba(255, 255, 255, 0.15);
+        }
+
+        .action-pill:hover {
+          background: rgba(255, 255, 255, 0.2);
+          transform: translateY(-2px);
+          box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
+        }
+
+        .action-pill:active {
+          transform: scale(0.97);
+        }
+
+        /* ==================== */
+        /* EDIT BUTTON GLASS */
+        /* ==================== */
+        .edit-button-ios {
+          width: 100%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 12px;
+          padding: 16px 24px;
+          color: white;
+          cursor: pointer;
+          transition: all 0.3s;
+          border-radius: 18px;
+          
+          /* دکمه اصلی شیشه‌ای */
+          background: rgba(255, 255, 255, 0.15);
+          backdrop-filter: blur(30px);
+          border: 1px solid rgba(255, 255, 255, 0.25);
+          box-shadow: 
+            0 8px 32px rgba(0, 0, 0, 0.2),
+            inset 0 1px 0 rgba(255, 255, 255, 0.3);
+        }
+
+        .edit-button-ios:hover {
+          background: rgba(255, 255, 255, 0.22);
+          transform: translateY(-2px);
+          box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
+        }
+
+        .edit-btn-content {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          font-size: 17px;
+          font-weight: 600;
+        }
+
+        .effects-badge-ios {
+          display: flex;
+          align-items: center;
+          gap: 4px;
+          background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+          padding: 6px 12px;
+          border-radius: 10px;
+          font-size: 12px;
+          font-weight: 600;
+          box-shadow: 0 4px 15px rgba(239, 68, 68, 0.5);
+        }
+
+        .video-section {
+          margin-bottom: 20px;
+        }
+
+        .section-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 14px;
+        }
+
+        .section-header h3 {
+          color: white;
+          font-size: 22px;
+          font-weight: 600;
+        }
+
+        .see-all-ios {
+          display: flex;
+          align-items: center;
+          gap: 2px;
+          background: none;
+          border: none;
+          color: rgba(255, 255, 255, 0.6);
+          font-size: 15px;
+          cursor: pointer;
+          transition: color 0.2s;
+        }
+
+        .see-all-ios:hover {
+          color: white;
+        }
+
+        .video-grid-ios {
+          display: flex;
+          gap: 12px;
+          overflow-x: auto;
+          padding-bottom: 10px;
+          scrollbar-width: none;
+          margin: 0 -20px;
+          padding-left: 20px;
+          padding-right: 20px;
+        }
+
+        .video-grid-ios::-webkit-scrollbar {
+          display: none;
+        }
+
+        /* ==================== */
+        /* VIDEO CARDS GLASS */
+        /* ==================== */
+        .video-card-glass {
+          position: relative;
+          min-width: 120px;
+          height: 155px;
+          border-radius: 20px;
+          overflow: hidden;
+          cursor: pointer;
+          transition: all 0.35s;
+          
+          /* کارت ویدیو با افکت شیشه‌ای */
+          box-shadow: 
+            0 8px 30px rgba(0, 0, 0, 0.3),
+            inset 0 1px 0 rgba(255, 255, 255, 0.1);
+        }
+
+        .video-card-glass::before {
+          content: '';
+          position: absolute;
+          inset: 0;
+          border-radius: 20px;
+          padding: 1px;
+          background: linear-gradient(135deg, 
+            rgba(255, 255, 255, 0.3) 0%, 
+            transparent 50%,
+            rgba(255, 255, 255, 0.1) 100%
+          );
+          -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+          mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+          -webkit-mask-composite: xor;
+          mask-composite: exclude;
+          pointer-events: none;
+          z-index: 2;
+        }
+
+        .video-card-glass:hover {
+          transform: scale(1.05) translateY(-5px);
+          box-shadow: 0 15px 40px rgba(0, 0, 0, 0.4);
+        }
+
+        .video-card-glass img {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+        }
+
+        .video-card-overlay {
+          position: absolute;
+          inset: 0;
+          background: linear-gradient(180deg, transparent 40%, rgba(0, 0, 0, 0.6) 100%);
+          pointer-events: none;
+        }
+
+        .video-duration-ios {
+          position: absolute;
+          bottom: 10px;
+          left: 10px;
+          padding: 4px 10px;
+          color: white;
+          font-size: 12px;
+          font-weight: 600;
+          z-index: 3;
+          border-radius: 8px;
+          
+          /* بج شیشه‌ای */
+          background: rgba(0, 0, 0, 0.4);
+          backdrop-filter: blur(115px);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        /* ==================== */
+        /* BOTTOM NAV GLASS */
+        /* ==================== */
+.bottom-nav-glass {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding-top: 10px;
+  z-index: 100;
+  
+  /* شیشه‌ای با لبه‌های گرد - هر گوشه مجزا */
+  border-top-left-radius: 48px;
+  border-top-right-radius: 48px;
+  border-bottom-left-radius: 28px;
+  border-bottom-right-radius: 28px;
+  
+  /* افکت شیشه‌ای قوی */
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur( 7px) saturate(180%);
+  -webkit-backdrop-filter: blur(7px) saturate(180%);
+  
+  /* حاشیه نورانی */
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  
+  /* سایه و عمق */
+  box-shadow: 
+    0 -5px 30px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+        .nav-items {
+          display: flex;
+          justify-content: space-around;
+          align-items: flex-end;
+          padding: 6px 12px 8px;
+        }
+
+        .nav-item-ios {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 4px;
+          background: none;
+          border: none;
+          color: rgba(255, 255, 255, 0.5);
+          font-size: 10px;
+          font-weight: 500;
+          cursor: pointer;
+          transition: all 0.25s;
+          padding: 4px 12px;
+        }
+
+        .nav-item-ios.active {
+          color: white;
+        }
+
+        .nav-item-ios:hover {
+          color: rgba(255, 255, 255, 0.8);
+        }
+
+        .nav-item-ios.add-button-ios {
+  position: relative;
+  bottom: 35px;  /* از 18px به 35px تغییر داد - هرچی بیشتر = بالاتر */
+  padding: 0;
+}
+
+
+        /* دکمه + شیشه‌ای با glow */
+       /* دکمه + شیشه‌ای 3D */
+.add-icon-ios {
+  width: 72px;
+  height: 64px;
+  border-top-left-radius: 47px;
+  border-top-right-radius: 40px;
+  border-bottom-right-radius: 36px;
+  border-bottom-left-radius: 33px;
+
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  cursor: pointer;
+  position: relative;
+  transition: all 0.3s;
+  
+  background: linear-gradient(
+    145deg,
+    #5eb2f7c3 0%,
+    #ffffffb1 20%,
+    #2b8be05f 40%,
+    #1a80d463 60%,
+    #13426b82 80%,
+    #0d5da340 100%
+  );
+  
+  box-shadow: 
+    0 8px 25px rgba(214, 227, 239, 0.359),
+    0 15px 35px rgba(247, 247, 247, 0.3),
+    0 4px 6px rgba(0, 50, 100, 0.4),
+    inset 0 2px 4px rgba(255, 255, 255, 0.4),
+    inset 0 -2px 4px rgba(0, 50, 100, 0.2);
+}
+
+.add-icon-ios::before {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 12%;
+  right: 12%;
+  height: 45%;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.6) 0%,
+    rgba(255, 255, 255, 0) 50%,
+    transparent 100%
+  );
+  border-radius: 50% 50% 40% 40%;
+  pointer-events: none;
+}
+
+.add-icon-ios::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  background: linear-gradient(
+    145deg,
+    rgba(120, 201, 255, 0.12) 0%,
+    transparent 50%,
+    rgba(0, 80, 150, 0.2) 100%
+  );
+  z-index: -1;
+  filter: blur(1px);
+}
+
+.add-icon-ios:hover {
+  transform: scale(1.08);
+  box-shadow: 
+    0 10px 30px rgba(30, 121, 200, 0.13),
+    0 20px 45px rgba(20, 100, 180, 0.4),
+    0 5px 8px rgba(0, 50, 100, 0.5),
+    inset 0 2px 4px rgba(255, 255, 255, 0.5),
+    inset 0 -2px 4px rgba(0, 50, 100, 0.2);
+}
+
+.add-icon-ios:active {
+  transform: scale(0.95);
+}
+
+        .home-indicator {
+          width: 134px;
+          height: 5px;
+          background: rgba(255, 255, 255, 0.3);
+          border-radius: 3px;
+          margin: 10px auto;
+        }
+
+        /* Animations */
+        @keyframes fadeInUp {
+          from {
+            opacity: 0;
+            transform: translateY(20px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
+        .search-bar-glass { animation: fadeInUp 0.5s ease-out; }
+        .logo { animation: fadeInUp 0.5s ease-out 0.1s both; }
+        .quick-edit-card-glass { animation: fadeInUp 0.5s ease-out 0.2s both; }
+        .video-section { animation: fadeInUp 0.5s ease-out 0.3s both; }
+
+        /* Responsive */
+        @media (max-width: 440px) {
+          .phone-frame {
+            border-radius: 0;
+            height: 100vh;
+            height: 100dvh;
+            max-width: 100%;
+            box-shadow: none;
+          }
+
+          .cutify-app {
+            padding: 0;
+          }
+        }
+
+        .loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid rgba(255, 255, 255, 0.1);
+  border-top-color: #3b82f6;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.profile-content {
+  padding-top: 20px;
+  padding-bottom: 100px;
+  min-height: calc(100vh - 100px);
+  overflow-y: auto;
+}
+.forgot-password-btn {
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 12px;
+  margin-top: 8px;
+  transition: color 0.2s;
+  width: 100%;
+  text-align: center;
+}
+
+.forgot-password-btn:hover {
+  color: #60a5fa;
+}
+
+/* ============================= */
+/* CRYPTO GLASS DASHBOARD CARDS */
+/* ============================= */
+
+.crypto-dashboard {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 10px;
+}
+
+/* کارت اصلی بالانس */
+.crypto-balance-glass {
+  position: relative;
+  padding: 20px;
+  border-radius: 24px;
+
+background: rgba(255, 255, 255, 0.08);
+backdrop-filter: blur(22px) saturate(160%) contrast(1.1);
+-webkit-backdrop-filter: blur(22px) saturate(160%) contrast(1.1);
+
+  border: 1px solid rgba(255, 255, 255, 0.28);
+
+  box-shadow:
+    0 12px 40px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+
+  color: white;
+}
+
+.crypto-balance-label {
+  font-size: 14px;
+  opacity: 0.75;
+}
+
+.crypto-balance-value {
+  margin-top: 6px;
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+}
+
+/* لیست کوین‌ها */
+.crypto-asset-glass {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+
+  padding: 16px 18px;
+  border-radius: 20px;
+
+background: rgba(255, 255, 255, 0.067);
+  backdrop-filter: blur(7px);
+  -webkit-backdrop-filter: blur(10px);
+
+
+  box-shadow:
+    0 8px 30px rgba(0, 0, 0, 0.25),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+/* سمت چپ: آیکن + اسم */
+.crypto-asset-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.crypto-coin-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  font-size: 18px;
+  font-weight: 700;
+
+  background: rgba(255, 255, 255, 0.25);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+
+.crypto-asset-name {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.crypto-asset-symbol {
+  font-size: 12px;
+  opacity: 0.6;
+}
+
+/* سمت راست: قیمت + درصد */
+.crypto-asset-right {
+  text-align: right;
+}
+
+.crypto-price {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.crypto-change {
+  margin-top: 2px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.crypto-change.positive {
+  color: #7CFF9B;
+}
+
+.crypto-change.negative {
+  color: #FF6B6B;
+}
+
+/* انیمیشن ورود */
+.crypto-balance-glass,
+.crypto-asset-glass {
+  animation: fadeInUp 0.5s ease-out both;
+}
+.crypto-balance-glass::after,
+.crypto-asset-glass::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+
+  .crypto-balance-glass::after,
+.crypto-asset-glass::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+
+  background: linear-gradient(
+    135deg,
+    rgba(255,255,255,0.55) 0%,
+    rgba(255,255,255,0.25) 20%,
+    rgba(255,255,255,0.1) 40%,
+    transparent 65%
+  );
+}
+
+}
+
+
+
+/* ============================= */
+/* GRADIENT BORDER - BOTTOM RIGHT ONLY (v2 fixed) */
+/* ============================= */
+
+.gradient-border-br {
+  position: relative;
+}
+
+.gradient-border-br::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 0.9px;
+  pointer-events: none;
+  z-index: 10;
+  
+  /* گرادینت دایره‌ای از گوشه پایین-راست */
+  background: radial-gradient(
+    circle at 90% 90%,
+    rgba(255, 255, 255, 0.5) 0%,
+    rgba(255, 255, 255, 0.4) 5%,
+    rgba(255, 255, 255, 0.3) 10%,
+    transparent 20%
+  );
+  
+  /* mask برای نشون دادن فقط border */
+  -webkit-mask: 
+    linear-gradient(#fff 0 0) content-box, 
+    linear-gradient(#fff 0 0);
+  mask: 
+    linear-gradient(#fff 0 0) content-box, 
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+}
+
+/* ============================= */
+/* MENU SINGLE CARDS GLASS STYLE */
+/* ============================= */
+
+.menu-card-single {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px !important;
+  margin-bottom: 12px !important;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.menu-card-single:hover {
+  background: rgba(255, 255, 255, 0.12);
+  transform: scale(1.02);
+}
+
+.menu-card-single:active {
+  transform: scale(0.98);
+}
+
+.menu-card-content {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.menu-icon-wrapper {
+  width: 46px;
+  height: 46px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  
+  background: rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  
+  color: white;
+}
+
+.menu-text-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.menu-item-title {
+  color: white;
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+}
+
+.menu-item-desc {
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 13px;
+  font-weight: 400;
+  min-height: 16px;
+}
+
+.menu-chevron {
+  color: rgba(255, 255, 255, 0.4);
+  transition: all 0.2s ease;
+}
+
+.menu-card-single:hover .menu-chevron {
+  color: rgba(255, 255, 255, 0.7);
+  transform: translateX(3px);
+}
+
+/* ============================= */
+/* SUPPORT CHAT GLASS STYLE */
+/* ============================= */
+
+.support-chat-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  position: relative;
+  z-index: 10;
+  overflow: hidden;
+}
+
+/* فقط موبایل - fixed برای جلوگیری از حرکت بک‌گراند */
+@media (max-width: 440px) {
+  .support-chat-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+  }
+}
+
+.chat-header-glass {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 20px;
+  margin: 20px 16px 0;
+  border-radius: 20px;
+  
+  /* همون استایل quick-edit-card-glass */
+  background: rgba(255, 255, 255, 0.116);
+  backdrop-filter: blur(4px) saturate(100%);
+  -webkit-backdrop-filter: blur(4px) saturate(100%);
+  border: 1px solid rgba(255, 255, 255, 0.466);
+}
+
+.chat-back-btn {
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+  color: white;
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.chat-back-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.chat-header-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.chat-avatar-glass {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+}
+
+.chat-header-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  text-align: right;
+}
+
+.chat-header-title {
+  color: white;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.chat-header-status {
+  color: #4ade80;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.chat-messages-area {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 20px 16px;
+  padding-bottom: 120px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.chat-messages-area::-webkit-scrollbar {
+  display: none;
+}
+
+.chat-bubble-glass {
+  max-width: 80%;
+  padding: 12px 16px;
+  border-radius: 18px;
+  position: relative;
+}
+
+.support-bubble {
+  align-self: flex-start;
+  /* همون استایل شیشه‌ای */
+  background: rgba(255, 255, 255, 0.116);
+  backdrop-filter: blur(4px) saturate(100%);
+  -webkit-backdrop-filter: blur(4px) saturate(100%);
+  border: 1px solid rgba(255, 255, 255, 0.466);
+  border-bottom-left-radius: 6px;
+}
+
+.user-bubble {
+  align-self: flex-end;
+  background: rgba(99, 102, 241, 0.4);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  border-bottom-right-radius: 6px;
+}
+
+.bubble-text {
+  color: white;
+  font-size: 15px;
+  line-height: 1.5;
+  margin: 0;
+  word-wrap: break-word;
+}
+
+.bubble-time {
+  display: block;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 11px;
+  margin-top: 6px;
+  text-align: right;
+}
+
+.chat-input-container-glass {
+  position: absolute;
+  bottom: 20px;
+  left: 16px;
+  right: 16px;
+  z-index: 20;
+}
+
+/* موبایل - اینپوت بالای کیبورد */
+@media (max-width: 440px) {
+  .chat-input-container-glass {
+    position: fixed;
+    bottom: env(keyboard-inset-height, 20px);
+    left: 16px;
+    right: 16px;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    transition: bottom 0.1s ease-out;
+  }
+}
+
+.chat-input-wrapper-glass {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 24px;
+  
+  /* همون استایل شیشه‌ای */
+  background: rgba(255, 255, 255, 0.116);
+  backdrop-filter: blur(4px) saturate(100%);
+  -webkit-backdrop-filter: blur(4px) saturate(100%);
+  border: 1px solid rgba(255, 255, 255, 0.466);
+}
+
+.chat-input-glass {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: white;
+  font-size: 15px;
+  padding: 8px 4px;
+  direction: rtl;
+  resize: none;
+  min-height: 24px;
+  max-height: 100px;
+  overflow-y: auto;
+  font-family: inherit;
+  line-height: 1.4;
+}
+
+.chat-input-glass::placeholder {
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.chat-send-btn-glass {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  border: none;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.chat-send-btn-glass:hover {
+  transform: scale(1.05);
+}
+
+.chat-send-btn-glass:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* ============================= */
+/* لایه شیشه‌ای روی بک‌گراند */
+/* ============================= */
+.bg-glass-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  
+  /* میزان محو بودن - این عدد رو تغییر بده */
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+  
+  background: rgba(255, 255, 255, 0.05);
+}
+
+/* چت تمام صفحه بدون navbar */
+.support-chat-fullscreen .chat-input-container-glass {
+  bottom: 20px;
+}
+
+/* ============================= */
+/* منوی پیام - ویرایش و حذف */
+/* ============================= */
+
+.chat-bubble-glass.selected {
+  transform: scale(0.98);
+  opacity: 0.8;
+}
+
+.message-menu-glass {
+  position: fixed;
+  display: flex;
+  gap: 8px;
+  padding: 8px;
+  border-radius: 16px;
+  z-index: 1000;
+  
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  
+  animation: menuPopIn 0.2s ease-out;
+  
+  /* همیشه وسط صفحه */
+  left: 50% !important;
+  transform: translateX(-50%);
+  max-width: calc(100% - 32px);
+}
+
+@keyframes menuPopIn {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) scale(1);
+  }
+}
+
+.menu-item-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border: none;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.menu-item-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.menu-item-btn.delete {
+  color: #ff6b6b;
+}
+
+.menu-item-btn.delete:hover {
+  background: rgba(255, 107, 107, 0.2);
+}
+
+/* مودال ویرایش */
+.edit-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  padding: 20px;
+}
+
+.edit-modal-glass {
+  width: 100%;
+  max-width: 350px;
+  padding: 20px;
+  border-radius: 24px;
+  
+  background: rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  
+  animation: modalSlideUp 0.3s ease-out;
+}
+
+@keyframes modalSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.edit-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  color: white;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.edit-close-btn {
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+  color: white;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.edit-close-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.edit-textarea-glass {
+  width: 100%;
+  min-height: 100px;
+  padding: 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.08);
+  color: white;
+  font-size: 15px;
+  font-family: inherit;
+  resize: none;
+  outline: none;
+  direction: rtl;
+}
+
+.edit-textarea-glass:focus {
+  border-color: rgba(255, 255, 255, 0.4);
+}
+
+.edit-modal-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.edit-cancel-btn,
+.edit-save-btn {
+  flex: 1;
+  padding: 12px;
+  border-radius: 14px;
+  border: none;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.edit-cancel-btn {
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+}
+
+.edit-cancel-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.edit-save-btn {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
+
+.edit-save-btn:hover {
+  transform: scale(1.02);
+}
+
+.edited-label {
+  font-size: 10px;
+  opacity: 0.7;
+}
+
+/* ============================= */
+/* دکمه ضمیمه و عکس در چت */
+/* ============================= */
+
+.chat-attach-btn {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.chat-attach-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+}
+
+/* پیام عکس */
+.image-bubble {
+  padding: 6px !important;
+  max-width: 70% !important;
+}
+
+.chat-image {
+  width: 100%;
+  max-width: 220px;
+  border-radius: 14px;
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+
+.chat-image:hover {
+  transform: scale(1.02);
+}
+
+/* مودال زوم عکس */
+.image-zoom-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 3000;
+  padding: 20px;
+  animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.zoom-close-btn {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255, 255, 255, 0.15);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  z-index: 10;
+}
+
+.zoom-close-btn:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.zoomed-image {
+  max-width: 90%;
+  max-height: 90vh;
+  border-radius: 12px;
+  object-fit: contain;
+  animation: zoomIn 0.3s ease-out;
+}
+
+@keyframes zoomIn {
+  from {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* ============================= */
+/* ضبط صدا و پیام صوتی */
+/* ============================= */
+
+/* نشانگر ضبط */
+.recording-indicator {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 10px;
+}
+
+.recording-dot {
+  width: 12px;
+  height: 12px;
+  background: #ff4444;
+  border-radius: 50%;
+  animation: pulse 1s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(0.9); }
+}
+
+.recording-time {
+  color: white;
+  font-size: 16px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.recording-text {
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 14px;
+}
+
+/* دکمه ضبط */
+.chat-send-btn-glass.recording {
+  background: linear-gradient(135deg, #ff4444 0%, #cc0000 100%);
+  animation: recordingPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes recordingPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 68, 68, 0.4); }
+  50% { box-shadow: 0 0 0 10px rgba(255, 68, 68, 0); }
+}
+
+/* پیام صوتی */
+.audio-bubble {
+  min-width: 200px;
+}
+
+.audio-message {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 0;
+}
+
+.audio-play-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.audio-play-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+  transform: scale(1.05);
+}
+
+.audio-wave {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  flex: 1;
+}
+
+.audio-wave-bar {
+  width: 4px;
+  background: rgba(255, 255, 255, 0.5);
+  border-radius: 2px;
+}
+
+.audio-wave-bar:nth-child(1) { height: 12px; }
+.audio-wave-bar:nth-child(2) { height: 18px; }
+.audio-wave-bar:nth-child(3) { height: 14px; }
+.audio-wave-bar:nth-child(4) { height: 22px; }
+.audio-wave-bar:nth-child(5) { height: 16px; }
+.audio-wave-bar:nth-child(6) { height: 20px; }
+.audio-wave-bar:nth-child(7) { height: 14px; }
+.audio-wave-bar:nth-child(8) { height: 10px; }
+
+/* انیمیشن فقط وقتی پخش میشه */
+.audio-message.playing .audio-wave-bar {
+  animation: wavePlay 0.5s ease-in-out infinite;
+}
+
+.audio-message.playing .audio-wave-bar:nth-child(1) { animation-delay: 0s; }
+.audio-message.playing .audio-wave-bar:nth-child(2) { animation-delay: 0.1s; }
+.audio-message.playing .audio-wave-bar:nth-child(3) { animation-delay: 0.2s; }
+.audio-message.playing .audio-wave-bar:nth-child(4) { animation-delay: 0.3s; }
+.audio-message.playing .audio-wave-bar:nth-child(5) { animation-delay: 0.4s; }
+.audio-message.playing .audio-wave-bar:nth-child(6) { animation-delay: 0.5s; }
+.audio-message.playing .audio-wave-bar:nth-child(7) { animation-delay: 0.6s; }
+.audio-message.playing .audio-wave-bar:nth-child(8) { animation-delay: 0.7s; }
+
+@keyframes wavePlay {
+  0%, 100% { transform: scaleY(1); }
+  50% { transform: scaleY(0.5); }
+}
+
+.audio-duration {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  min-width: 35px;
+}

@@ -1,0 +1,19 @@
+# Build output
+build/
+dist/
+
+# Dependencies
+node_modules/
+
+# OS files
+.DS_Store
+
+# Env files
+.env
+.env.local
+.env.production
+.env.development
+
+# Archives
+*.zip
+

@@ -1,0 +1,146 @@
+{
+  "translation": {
+    "quickEdit": "Modifica rapida",
+    "videoPreview": "Anteprima video",
+    "trim": "Ritaglia",
+    "split": "Dividi",
+    "cut": "Taglia",
+    "more": "Altro",
+    "edit": "Modifica",
+    "effects": "Effetti",
+    "editYourVideo": "Modifica il tuo video",
+    "seeAll": "Vedi tutto",
+
+    "home": "Home",
+    "projects": "Progetti",
+    "templates": "Modelli",
+    "profile": "Profilo",
+    "uploadVideo": "Carica video",
+    "uploadVideos": "Carica video",
+    "uploadYourVideo": "Carica il tuo video",
+    "uploadMultiple": "Carica più file",
+    "continueDraft": "Continua bozza",
+    "pasteCloudLink": "Incolla link cloud",
+    "tapToUpload": "Tocca per caricare",
+    "addMore": "Aggiungi altri video",
+
+    "uploadDescription": "Aggiungi e modifica i tuoi clip video",
+
+    "describeWhatYouWantToDo": "Descrivi cosa desideri che facciamo con questi video…",
+    "send": "Invia",
+
+    "filesSelected": "File selezionati",
+    "fileSelected_one": "{{count}} file selezionato",
+    "fileSelected_other": "{{count}} file selezionati",
+    "videoDescription": "Aggiungi una descrizione per questo video…",
+    "globalDescription": "Descrivi cosa desideri che facciamo con questi video…",
+    "continue": "Continua",
+    "back": "Indietro",
+
+    "selectStyle": "Seleziona stile",
+    "chooseStyle": "Scegli uno stile per il tuo video",
+    "applyStyle": "Applica stile",
+
+    "deliveryTime": "Tempo di consegna",
+    "chooseDelivery": "Scegli la velocità di consegna",
+    "standard": "Standard",
+    "fast": "Veloce",
+    "rush": "Urgente",
+
+    "extras": "Extra",
+    "chooseExtras": "Aggiungi funzionalità extra al tuo video",
+    "subtitlesBasic": "Sottotitoli base",
+    "subtitlesPro": "Sottotitoli professionali",
+    "colorGrading": "Color grading",
+    "musicLicense": "Licenza musicale",
+
+    "submit": "Conferma",
+    "generalDescription": "Descrizione generale",
+    "generalDescriptionPlaceholder": "Aggiungi una descrizione generale per il tuo progetto…",
+
+    "reviewOrder": "Rivedi ordine",
+    "reviewOrderDesc": "Controlla il tuo ordine prima della conferma",
+    "videos": "Video",
+    "style": "Stile",
+    "delivery": "Consegna",
+    "total": "Totale",
+    "submitOrder": "Conferma ordine",
+
+    "welcomeBack": "Bentornato",
+    "loginToContinue": "Accedi per continuare",
+    "usernameOrEmail": "Nome utente o e-mail",
+    "password": "Password",
+    "login": "Accedi",
+    "loginError": "Accesso non riuscito. Riprova.",
+
+    "forgotPassword": "Password dimenticata?",
+    "forgotPasswordDesc": "Inserisci la tua e-mail e ti invieremo un link per reimpostare la password.",
+    "email": "E-mail",
+    "sendResetLink": "Invia link",
+    "emailSent": "E-mail inviata",
+    "checkEmail": "Controlla la tua e-mail per il link di reimpostazione.",
+    "backToLogin": "Torna al login",
+    "resetError": "Invio dell’e-mail non riuscito. Riprova.",
+
+    "editName": "Modifica nome",
+    "changePassword": "Cambia password",
+    "logout": "Disconnetti",
+    "fullName": "Nome completo",
+    "enterName": "Inserisci il tuo nome",
+    "save": "Salva",
+    "nameUpdated": "Nome aggiornato con successo",
+
+    "currentPassword": "Password attuale",
+    "newPassword": "Nuova password",
+    "confirmPassword": "Conferma password",
+    "enterCurrentPassword": "Inserisci la password attuale",
+    "enterNewPassword": "Inserisci la nuova password",
+    "confirmNewPassword": "Conferma la nuova password",
+
+    "passwordChanged": "Password modificata con successo",
+    "passwordMismatch": "Le password non corrispondono",
+    "passwordTooShort": "La password deve contenere almeno 6 caratteri",
+
+    "settings": "Impostazioni",
+    "privacy": "Privacy",
+    "help": "Aiuto e supporto",
+
+    "createAccount": "Crea account",
+    "registerToContinue": "Registrati per iniziare",
+    "username": "Nome utente",
+    "register": "Registrati",
+    "registerError": "Registrazione non riuscita. Riprova.",
+    "noAccount": "Non hai un account?",
+    "or": "oppure",
+
+    "usernameExists": "Il nome utente esiste già",
+    "emailExists": "L’e-mail esiste già",
+    "googleLoginError": "Accesso con Google non riuscito. Riprova.",
+    "signingIn": "Accesso in corso…",
+    "continueWithGoogle": "Continua con Google",
+
+    "loginRequired": "Effettua l’accesso per continuare",
+    "loginToContinueOrder": "Accedi per confermare l’ordine",
+
+    "myProjects": "I miei progetti",
+    "loading": "Caricamento…",
+    "loginToSeeProjects": "Accedi per visualizzare i tuoi progetti",
+    "noProjects": "Nessun progetto disponibile",
+    "noProjectsDesc": "I tuoi ordini appariranno qui",
+
+    "orderDate": "Data ordine",
+    "progress": "Avanzamento",
+
+    "sendMoreInfo": "Invia ulteriori informazioni",
+    "typeMessage": "Scrivi il tuo messaggio…",
+    "messageSent": "Messaggio inviato con successo",
+    "messageFailed": "Invio del messaggio non riuscito",
+
+    "downloadFiles": "Scarica file",
+    "downloadStarting": "Download in corso…",
+
+    "messages": "Messaggi",
+    "noMessages": "Nessun messaggio disponibile",
+    "noDownload": "Nessun file disponibile per il download"
+  }
+}
