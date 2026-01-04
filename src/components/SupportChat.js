@@ -1,22 +1,20 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, ArrowLeft, Headphones, Trash2, Edit3, X, Paperclip, Mic, Square, Play, Pause } from 'lucide-react';
+import Pusher from 'pusher-js';
+import { authService } from '../services/authService';
+
+const API_URL = 'https://asadmindset.com/wp-json/asadmindset/v1';
+const PUSHER_KEY = '71815fd9e2b90f89a57b';
+const PUSHER_CLUSTER = 'eu';
 
 const SupportChat = ({ onBack }) => {
-  const [messages, setMessages] = useState([
-    {
-      id: 1,
-      text: 'سلام! به پشتیبانی خوش آمدید 👋',
-      sender: 'support',
-      time: '10:30'
-    },
-    {
-      id: 2,
-      text: 'چطور می‌تونم کمکتون کنم؟',
-      sender: 'support',
-      time: '10:30'
-    }
-  ]);
+  const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [sending, setSending] = useState(false);
+  const [conversationId, setConversationId] = useState(null);
+  
+  // Menu states
   const [selectedMessage, setSelectedMessage] = useState(null);
   const [showMenu, setShowMenu] = useState(false);
   const [menuPosition, setMenuPosition] = useState({ x: 0, y: 0 });
@@ -24,12 +22,13 @@ const SupportChat = ({ onBack }) => {
   const [editText, setEditText] = useState('');
   const [zoomedImage, setZoomedImage] = useState(null);
   
-  // وضعیت ضبط صدا
+  // Recording states
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const [playingAudioId, setPlayingAudioId] = useState(null);
   const [audioCurrentTime, setAudioCurrentTime] = useState(0);
   
+  // Refs
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -38,6 +37,148 @@ const SupportChat = ({ onBack }) => {
   const audioChunksRef = useRef([]);
   const recordingTimerRef = useRef(null);
   const audioRefs = useRef({});
+  const pusherRef = useRef(null);
+  const channelRef = useRef(null);
+
+  // Initialize: Load conversation and connect to Pusher
+  useEffect(() => {
+    loadConversation();
+    
+    return () => {
+      // Cleanup Pusher on unmount
+      if (channelRef.current) {
+        channelRef.current.unbind_all();
+      }
+      if (pusherRef.current) {
+        pusherRef.current.disconnect();
+      }
+    };
+  }, []);
+
+  // Load conversation from API
+  const loadConversation = async () => {
+    try {
+      const token = authService.getToken();
+      const response = await fetch(`${API_URL}/conversation`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (!response.ok) throw new Error('Failed to load conversation');
+      
+      const data = await response.json();
+      
+      // Format messages
+      const formattedMessages = data.messages.map(msg => ({
+        id: msg.id,
+        text: msg.type === 'text' ? msg.content : null,
+        image: msg.type === 'image' ? msg.mediaUrl : null,
+        audio: msg.type === 'audio' ? msg.mediaUrl : null,
+        duration: msg.duration || 0,
+        sender: msg.sender === 'admin' ? 'support' : 'user',
+        time: formatMessageTime(msg.createdAt),
+        edited: msg.isEdited
+      }));
+      
+      setMessages(formattedMessages);
+      setConversationId(data.conversationId);
+      
+      // Connect to Pusher
+      connectPusher(data.pusherChannel);
+      
+    } catch (error) {
+      console.error('Error loading conversation:', error);
+      // Show default welcome message on error
+      setMessages([{
+        id: 1,
+        text: 'سلام! به پشتیبانی خوش آمدید 👋',
+        sender: 'support',
+        time: formatMessageTime(new Date().toISOString())
+      }]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Connect to Pusher
+  const connectPusher = (channelName) => {
+    if (pusherRef.current) return;
+    
+    pusherRef.current = new Pusher(PUSHER_KEY, {
+      cluster: PUSHER_CLUSTER,
+      forceTLS: true
+    });
+    
+    channelRef.current = pusherRef.current.subscribe(channelName);
+    
+    // Listen for new messages
+    channelRef.current.bind('new-message', (data) => {
+      // Only add admin messages (user messages are added locally)
+      if (data.sender === 'admin') {
+        const newMsg = {
+          id: data.id,
+          text: data.type === 'text' ? data.content : null,
+          image: data.type === 'image' ? data.mediaUrl : null,
+          audio: data.type === 'audio' ? data.mediaUrl : null,
+          duration: data.duration || 0,
+          sender: 'support',
+          time: formatMessageTime(data.createdAt),
+          edited: false
+        };
+        setMessages(prev => [...prev, newMsg]);
+        
+        // Play notification sound
+        playNotificationSound();
+      }
+    });
+    
+    // Listen for message edits
+    channelRef.current.bind('message-edited', (data) => {
+      setMessages(prev => prev.map(msg => 
+        msg.id === data.id ? { ...msg, text: data.content, edited: true } : msg
+      ));
+    });
+    
+    // Listen for message deletions
+    channelRef.current.bind('message-deleted', (data) => {
+      setMessages(prev => prev.filter(msg => msg.id !== data.id));
+    });
+  };
+
+  // Play notification sound
+  const playNotificationSound = () => {
+    try {
+      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+      
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+      
+      oscillator.frequency.value = 800;
+      oscillator.type = 'sine';
+      gainNode.gain.value = 0.1;
+      
+      oscillator.start();
+      setTimeout(() => oscillator.stop(), 150);
+    } catch (e) {
+      // Ignore audio errors
+    }
+  };
+
+  // Format message time
+  const formatMessageTime = (dateString) => {
+    const date = new Date(dateString);
+    return `${date.getHours()}:${date.getMinutes().toString().padStart(2, '0')}`;
+  };
+
+  // Format recording time
+  const formatTime = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -47,7 +188,7 @@ const SupportChat = ({ onBack }) => {
     scrollToBottom();
   }, [messages]);
 
-  // جلوگیری از اسکرول بک‌گراند با کیبورد - فقط موبایل
+  // Mobile body lock
   useEffect(() => {
     const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
     
@@ -66,7 +207,7 @@ const SupportChat = ({ onBack }) => {
     };
   }, []);
 
-  // بستن منو با کلیک بیرون
+  // Close menu on outside click
   useEffect(() => {
     const handleClickOutside = () => {
       if (showMenu) {
@@ -79,18 +220,17 @@ const SupportChat = ({ onBack }) => {
     return () => document.removeEventListener('click', handleClickOutside);
   }, [showMenu]);
 
-  // شروع لانگ پرس
+  // Long press handlers
   const handleTouchStart = (e, msg) => {
+    if (msg.sender !== 'user') return; // Only user messages can be edited/deleted
+    
     longPressTimer.current = setTimeout(() => {
       const rect = e.target.getBoundingClientRect();
       
       setSelectedMessage(msg);
-      setMenuPosition({
-        y: rect.top - 60
-      });
+      setMenuPosition({ y: rect.top - 60 });
       setShowMenu(true);
       
-      // ویبره در موبایل
       if (navigator.vibrate) {
         navigator.vibrate(50);
       }
@@ -109,17 +249,36 @@ const SupportChat = ({ onBack }) => {
     }
   };
 
-  // حذف پیام
-  const handleDelete = (e) => {
+  // Delete message
+  const handleDelete = async (e) => {
     e.stopPropagation();
-    if (selectedMessage) {
-      setMessages(messages.filter(m => m.id !== selectedMessage.id));
-      setShowMenu(false);
-      setSelectedMessage(null);
+    if (!selectedMessage) return;
+    
+    const msgId = selectedMessage.id;
+    
+    // Optimistic update
+    setMessages(messages.filter(m => m.id !== msgId));
+    setShowMenu(false);
+    setSelectedMessage(null);
+    
+    try {
+      const token = authService.getToken();
+      const response = await fetch(`${API_URL}/messages/${msgId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (!response.ok) throw new Error('Failed to delete');
+    } catch (error) {
+      console.error('Error deleting message:', error);
+      // Reload conversation on error
+      loadConversation();
     }
   };
 
-  // شروع ویرایش
+  // Edit message
   const handleEdit = (e) => {
     e.stopPropagation();
     if (selectedMessage) {
@@ -130,57 +289,107 @@ const SupportChat = ({ onBack }) => {
     }
   };
 
-  // ذخیره ویرایش
-  const handleSaveEdit = () => {
-    if (editingMessage && editText.trim()) {
-      setMessages(messages.map(m => 
-        m.id === editingMessage.id 
-          ? { ...m, text: editText, edited: true }
-          : m
-      ));
-      setEditingMessage(null);
-      setEditText('');
+  const handleSaveEdit = async () => {
+    if (!editingMessage || !editText.trim()) return;
+    
+    const msgId = editingMessage.id;
+    const newText = editText;
+    
+    // Optimistic update
+    setMessages(messages.map(m => 
+      m.id === msgId 
+        ? { ...m, text: newText, edited: true }
+        : m
+    ));
+    setEditingMessage(null);
+    setEditText('');
+    
+    try {
+      const token = authService.getToken();
+      const response = await fetch(`${API_URL}/messages/${msgId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ content: newText })
+      });
+      
+      if (!response.ok) throw new Error('Failed to edit');
+    } catch (error) {
+      console.error('Error editing message:', error);
+      // Reload conversation on error
+      loadConversation();
     }
   };
 
-  // لغو ویرایش
   const handleCancelEdit = () => {
     setEditingMessage(null);
     setEditText('');
   };
 
-  const handleSend = () => {
-    if (!newMessage.trim()) return;
+  // Send text message
+  const handleSend = async () => {
+    if (!newMessage.trim() || sending) return;
 
-    const now = new Date();
-    const time = `${now.getHours()}:${now.getMinutes().toString().padStart(2, '0')}`;
-
-    setMessages([
-      ...messages,
-      {
-        id: Date.now(),
-        text: newMessage,
-        sender: 'user',
-        time: time
-      }
-    ]);
+    const tempId = Date.now();
+    const time = formatMessageTime(new Date().toISOString());
+    
+    // Add message locally first (optimistic update)
+    const localMessage = {
+      id: tempId,
+      text: newMessage,
+      sender: 'user',
+      time: time
+    };
+    
+    setMessages(prev => [...prev, localMessage]);
     setNewMessage('');
+    setSending(true);
+
+    try {
+      const token = authService.getToken();
+      const response = await fetch(`${API_URL}/conversation/message`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          type: 'text',
+          content: newMessage
+        })
+      });
+
+      if (!response.ok) throw new Error('Failed to send message');
+      
+      const data = await response.json();
+      
+      // Update with real ID
+      setMessages(prev => prev.map(m => 
+        m.id === tempId ? { ...m, id: data.message.id } : m
+      ));
+      
+    } catch (error) {
+      console.error('Error sending message:', error);
+      // Remove failed message
+      setMessages(prev => prev.filter(m => m.id !== tempId));
+      alert('خطا در ارسال پیام');
+    } finally {
+      setSending(false);
+    }
   };
 
-  // کلیک روی دکمه ارسال - جلوگیری از blur
   const handleSendClick = (e) => {
     e.preventDefault();
     e.stopPropagation();
     handleSend();
-    // فوکوس رو برگردون
     requestAnimationFrame(() => {
       inputRef.current?.focus();
     });
   };
 
   const handleKeyDown = (e) => {
-    // موبایل: اینتر = خط جدید
-    // کامپیوتر: اینتر = ارسال، Shift+Enter = خط جدید
     const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
     
     if (e.key === 'Enter' && !isMobile && !e.shiftKey) {
@@ -189,42 +398,85 @@ const SupportChat = ({ onBack }) => {
     }
   };
 
-  // آپلود عکس
-  const handleImageUpload = (e) => {
+  // Upload image
+  const handleImageUpload = async (e) => {
     const file = e.target.files[0];
-    if (file && file.type.startsWith('image/')) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const now = new Date();
-        const time = `${now.getHours()}:${now.getMinutes().toString().padStart(2, '0')}`;
-        
-        setMessages([
-          ...messages,
-          {
-            id: Date.now(),
-            image: event.target.result,
-            sender: 'user',
-            time: time
-          }
-        ]);
+    if (!file || !file.type.startsWith('image/')) return;
+
+    const tempId = Date.now();
+    const time = formatMessageTime(new Date().toISOString());
+    
+    // Show local preview
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const localMessage = {
+        id: tempId,
+        image: event.target.result,
+        sender: 'user',
+        time: time
       };
-      reader.readAsDataURL(file);
+      setMessages(prev => [...prev, localMessage]);
+    };
+    reader.readAsDataURL(file);
+
+    // Upload to server
+    try {
+      const token = authService.getToken();
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const uploadResponse = await fetch(`${API_URL}/upload`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
+        body: formData
+      });
+
+      if (!uploadResponse.ok) throw new Error('Upload failed');
+      
+      const uploadData = await uploadResponse.json();
+
+      // Send message with image URL
+      const messageResponse = await fetch(`${API_URL}/conversation/message`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          type: 'image',
+          mediaUrl: uploadData.url
+        })
+      });
+
+      if (!messageResponse.ok) throw new Error('Failed to send image');
+      
+      const messageData = await messageResponse.json();
+      
+      // Update with real data
+      setMessages(prev => prev.map(m => 
+        m.id === tempId ? { ...m, id: messageData.message.id, image: uploadData.url } : m
+      ));
+
+    } catch (error) {
+      console.error('Error uploading image:', error);
+      setMessages(prev => prev.filter(m => m.id !== tempId));
+      alert('خطا در آپلود تصویر');
     }
-    // ریست کردن input برای انتخاب مجدد همان فایل
+    
     e.target.value = '';
   };
 
-  // باز کردن انتخاب فایل
   const handleAttachClick = () => {
     fileInputRef.current?.click();
   };
 
-  // شروع ضبط صدا
+  // Start recording
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       
-      // انتخاب فرمت مناسب برای iOS و Android
       let mimeType = 'audio/webm';
       if (MediaRecorder.isTypeSupported('audio/mp4')) {
         mimeType = 'audio/mp4';
@@ -241,25 +493,71 @@ const SupportChat = ({ onBack }) => {
         audioChunksRef.current.push(e.data);
       };
 
-      mediaRecorderRef.current.onstop = () => {
+      mediaRecorderRef.current.onstop = async () => {
         const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
         const audioUrl = URL.createObjectURL(audioBlob);
+        const duration = recordingTime;
         
-        const now = new Date();
-        const time = `${now.getHours()}:${now.getMinutes().toString().padStart(2, '0')}`;
+        const tempId = Date.now();
+        const time = formatMessageTime(new Date().toISOString());
         
-        setMessages(prev => [
-          ...prev,
-          {
-            id: Date.now(),
-            audio: audioUrl,
-            duration: recordingTime,
-            sender: 'user',
-            time: time
-          }
-        ]);
+        // Add local preview
+        const localMessage = {
+          id: tempId,
+          audio: audioUrl,
+          duration: duration,
+          sender: 'user',
+          time: time
+        };
+        setMessages(prev => [...prev, localMessage]);
+
+        // Upload to server
+        try {
+          const token = authService.getToken();
+          const formData = new FormData();
+          formData.append('file', audioBlob, `audio-${Date.now()}.${mimeType.split('/')[1]}`);
+
+          const uploadResponse = await fetch(`${API_URL}/upload`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${token}`
+            },
+            body: formData
+          });
+
+          if (!uploadResponse.ok) throw new Error('Upload failed');
+          
+          const uploadData = await uploadResponse.json();
+
+          // Send message
+          const messageResponse = await fetch(`${API_URL}/conversation/message`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({
+              type: 'audio',
+              mediaUrl: uploadData.url,
+              duration: duration
+            })
+          });
+
+          if (!messageResponse.ok) throw new Error('Failed to send audio');
+          
+          const messageData = await messageResponse.json();
+          
+          // Update with real data
+          setMessages(prev => prev.map(m => 
+            m.id === tempId ? { ...m, id: messageData.message.id, audio: uploadData.url } : m
+          ));
+
+        } catch (error) {
+          console.error('Error uploading audio:', error);
+          setMessages(prev => prev.filter(m => m.id !== tempId));
+          alert('خطا در ارسال صدا');
+        }
         
-        // بستن استریم
         stream.getTracks().forEach(track => track.stop());
         setRecordingTime(0);
       };
@@ -267,18 +565,17 @@ const SupportChat = ({ onBack }) => {
       mediaRecorderRef.current.start();
       setIsRecording(true);
       
-      // تایمر ضبط
       recordingTimerRef.current = setInterval(() => {
         setRecordingTime(prev => prev + 1);
       }, 1000);
 
     } catch (err) {
-      console.error('خطا در دسترسی به میکروفن:', err);
+      console.error('Microphone error:', err);
       alert('لطفاً دسترسی به میکروفن را فعال کنید');
     }
   };
 
-  // توقف ضبط
+  // Stop recording
   const stopRecording = () => {
     if (mediaRecorderRef.current && isRecording) {
       mediaRecorderRef.current.stop();
@@ -287,14 +584,7 @@ const SupportChat = ({ onBack }) => {
     }
   };
 
-  // فرمت زمان
-  const formatTime = (seconds) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
-
-  // پخش/توقف صدا
+  // Toggle audio play
   const toggleAudioPlay = (msgId, audioUrl) => {
     const audio = audioRefs.current[msgId];
     
@@ -303,30 +593,20 @@ const SupportChat = ({ onBack }) => {
       setPlayingAudioId(null);
       setAudioCurrentTime(0);
     } else {
-      // توقف صدای قبلی
       if (playingAudioId && audioRefs.current[playingAudioId]) {
         audioRefs.current[playingAudioId].pause();
         audioRefs.current[playingAudioId].currentTime = 0;
       }
       setAudioCurrentTime(0);
       
-      // پخش با هندل کردن خطا
       if (audio) {
-        const playPromise = audio.play();
-        if (playPromise !== undefined) {
-          playPromise
-            .then(() => {
-              setPlayingAudioId(msgId);
-            })
-            .catch(err => {
-              console.error('خطا در پخش صدا:', err);
-            });
-        }
+        audio.play()
+          .then(() => setPlayingAudioId(msgId))
+          .catch(err => console.error('Play error:', err));
       }
     }
   };
 
-  // هندل کلیک روی دکمه میکروفن/ارسال
   const handleMicOrSend = (e) => {
     e.preventDefault();
     e.stopPropagation();
@@ -342,6 +622,30 @@ const SupportChat = ({ onBack }) => {
       startRecording();
     }
   };
+
+  if (loading) {
+    return (
+      <div className="support-chat-container">
+        <div className="chat-header-glass">
+          <button className="chat-back-btn" onClick={onBack}>
+            <ArrowLeft size={22} />
+          </button>
+          <div className="chat-header-info">
+            <div className="chat-header-text">
+              <span className="chat-header-title">پشتیبانی</span>
+              <span className="chat-header-status">در حال اتصال...</span>
+            </div>
+            <div className="chat-avatar-glass">
+              <Headphones size={20} />
+            </div>
+          </div>
+        </div>
+        <div className="chat-loading">
+          <div className="chat-loading-spinner"></div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="support-chat-container">
@@ -371,6 +675,7 @@ const SupportChat = ({ onBack }) => {
             onTouchEnd={handleTouchEnd}
             onTouchMove={handleTouchMove}
             onContextMenu={(e) => {
+              if (msg.sender !== 'user') return;
               e.preventDefault();
               setSelectedMessage(msg);
               setMenuPosition({ y: e.clientY - 60 });
@@ -378,7 +683,7 @@ const SupportChat = ({ onBack }) => {
             }}
             onClick={(e) => {
               const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-              if (!isMobile && !msg.image && !msg.audio) {
+              if (!isMobile && msg.sender === 'user' && !msg.image && !msg.audio) {
                 setSelectedMessage(msg);
                 setMenuPosition({ y: e.clientY - 60 });
                 setShowMenu(true);
@@ -416,7 +721,7 @@ const SupportChat = ({ onBack }) => {
                   <div className="audio-wave-bar"></div>
                   <div className="audio-wave-bar"></div>
                 </div>
-                <span className="audio-duration" data-msgid={msg.id}>
+                <span className="audio-duration">
                   {playingAudioId === msg.id 
                     ? `${formatTime(audioCurrentTime)} / ${formatTime(Math.floor(audioRefs.current[msg.id]?.duration || msg.duration || 0))}`
                     : formatTime(Math.floor(audioRefs.current[msg.id]?.duration || msg.duration || 0))
@@ -426,7 +731,6 @@ const SupportChat = ({ onBack }) => {
                   ref={el => audioRefs.current[msg.id] = el}
                   src={msg.audio}
                   onLoadedMetadata={(e) => {
-                    // آپدیت duration واقعی
                     const realDuration = Math.floor(e.target.duration);
                     setMessages(prev => prev.map(m => 
                       m.id === msg.id ? { ...m, duration: realDuration } : m
@@ -455,13 +759,11 @@ const SupportChat = ({ onBack }) => {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* منوی پاپ‌آپ */}
-      {showMenu && (
+      {/* Menu Popup */}
+      {showMenu && selectedMessage?.sender === 'user' && (
         <div 
           className="message-menu-glass"
-          style={{
-            top: `${menuPosition.y}px`,
-          }}
+          style={{ top: `${menuPosition.y}px` }}
           onClick={(e) => e.stopPropagation()}
         >
           {!selectedMessage?.image && !selectedMessage?.audio && (
@@ -477,7 +779,7 @@ const SupportChat = ({ onBack }) => {
         </div>
       )}
 
-      {/* مودال ویرایش */}
+      {/* Edit Modal */}
       {editingMessage && (
         <div className="edit-modal-overlay" onClick={handleCancelEdit}>
           <div className="edit-modal-glass" onClick={(e) => e.stopPropagation()}>
@@ -505,7 +807,7 @@ const SupportChat = ({ onBack }) => {
         </div>
       )}
 
-      {/* مودال زوم عکس */}
+      {/* Image Zoom Modal */}
       {zoomedImage && (
         <div className="image-zoom-overlay" onClick={() => setZoomedImage(null)}>
           <button className="zoom-close-btn" onClick={() => setZoomedImage(null)}>
@@ -553,6 +855,7 @@ const SupportChat = ({ onBack }) => {
               onKeyDown={handleKeyDown}
               className="chat-input-glass"
               rows={1}
+              disabled={sending}
             />
           )}
           
@@ -560,6 +863,7 @@ const SupportChat = ({ onBack }) => {
             className={`chat-send-btn-glass ${isRecording ? 'recording' : ''}`}
             onTouchEnd={handleMicOrSend}
             onMouseDown={handleMicOrSend}
+            disabled={sending}
           >
             {newMessage.trim() ? (
               <Send size={20} />

@@ -1200,7 +1200,7 @@ background: rgba(255, 255, 255, 0.067);
   justify-content: space-between;
   gap: 12px;
   padding: 16px 20px;
-  margin: 20px 16px 0;
+  margin: 60px 16px 0;
   border-radius: 20px;
   
   /* همون استایل quick-edit-card-glass */
@@ -1843,4 +1843,25 @@ background: rgba(255, 255, 255, 0.067);
   font-size: 13px;
   font-variant-numeric: tabular-nums;
   min-width: 35px;
+}
+
+/* Chat Loading */
+.chat-loading {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.chat-loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid rgba(255, 255, 255, 0.1);
+  border-top-color: rgba(255, 255, 255, 0.8);
+  border-radius: 50%;
+  animation: chatSpin 0.8s linear infinite;
+}
+
+@keyframes chatSpin {
+  to { transform: rotate(360deg); }
 }
