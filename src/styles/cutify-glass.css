@@ -1865,3 +1865,28 @@ background: rgba(255, 255, 255, 0.067);
 @keyframes chatSpin {
   to { transform: rotate(360deg); }
 }
+
+
+/* Message Status Ticks */
+.message-status {
+  margin-right: 4px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.message-status.sending {
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 10px;
+}
+
+.message-status.sent {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.message-status.delivered {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.message-status.read {
+  color: #34b7f1;
+}

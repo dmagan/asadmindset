@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, ArrowLeft, Headphones, Trash2, Edit3, X, Paperclip, Mic, Square, Play, Pause } from 'lucide-react';
+import { Send, ArrowLeft, Headphones, Trash2, Edit3, X, Paperclip, Mic, Square, Play, Pause, Check, CheckCheck } from 'lucide-react';
 import Pusher from 'pusher-js';
 import { authService } from '../services/authService';
 
@@ -40,12 +40,11 @@ const SupportChat = ({ onBack }) => {
   const pusherRef = useRef(null);
   const channelRef = useRef(null);
 
-  // Initialize: Load conversation and connect to Pusher
+  // Initialize
   useEffect(() => {
     loadConversation();
     
     return () => {
-      // Cleanup Pusher on unmount
       if (channelRef.current) {
         channelRef.current.unbind_all();
       }
@@ -55,7 +54,30 @@ const SupportChat = ({ onBack }) => {
     };
   }, []);
 
-  // Load conversation from API
+  // Mark admin messages as read when chat is open
+  useEffect(() => {
+    if (conversationId && messages.length > 0) {
+      const unreadAdminMessages = messages.filter(m => m.sender === 'support' && m.status !== 'read');
+      if (unreadAdminMessages.length > 0) {
+        markMessagesAsRead();
+      }
+    }
+  }, [messages, conversationId]);
+
+  const markMessagesAsRead = async () => {
+    try {
+      const token = authService.getToken();
+      await fetch(`${API_URL}/conversation/read`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+    } catch (error) {
+      console.error('Error marking messages as read:', error);
+    }
+  };
+
   const loadConversation = async () => {
     try {
       const token = authService.getToken();
@@ -69,7 +91,6 @@ const SupportChat = ({ onBack }) => {
       
       const data = await response.json();
       
-      // Format messages
       const formattedMessages = data.messages.map(msg => ({
         id: msg.id,
         text: msg.type === 'text' ? msg.content : null,
@@ -78,30 +99,28 @@ const SupportChat = ({ onBack }) => {
         duration: msg.duration || 0,
         sender: msg.sender === 'admin' ? 'support' : 'user',
         time: formatMessageTime(msg.createdAt),
-        edited: msg.isEdited
+        edited: msg.isEdited,
+        status: msg.status || 'sent'
       }));
       
       setMessages(formattedMessages);
       setConversationId(data.conversationId);
-      
-      // Connect to Pusher
       connectPusher(data.pusherChannel);
       
     } catch (error) {
       console.error('Error loading conversation:', error);
-      // Show default welcome message on error
       setMessages([{
         id: 1,
         text: 'سلام! به پشتیبانی خوش آمدید 👋',
         sender: 'support',
-        time: formatMessageTime(new Date().toISOString())
+        time: formatMessageTime(new Date().toISOString()),
+        status: 'read'
       }]);
     } finally {
       setLoading(false);
     }
   };
 
-  // Connect to Pusher
   const connectPusher = (channelName) => {
     if (pusherRef.current) return;
     
@@ -112,9 +131,8 @@ const SupportChat = ({ onBack }) => {
     
     channelRef.current = pusherRef.current.subscribe(channelName);
     
-    // Listen for new messages
+    // New message from admin
     channelRef.current.bind('new-message', (data) => {
-      // Only add admin messages (user messages are added locally)
       if (data.sender === 'admin') {
         const newMsg = {
           id: data.id,
@@ -124,29 +142,39 @@ const SupportChat = ({ onBack }) => {
           duration: data.duration || 0,
           sender: 'support',
           time: formatMessageTime(data.createdAt),
-          edited: false
+          edited: false,
+          status: 'delivered'
         };
         setMessages(prev => [...prev, newMsg]);
-        
-        // Play notification sound
         playNotificationSound();
+        
+        // Mark as read immediately since chat is open
+        markMessagesAsRead();
       }
     });
     
-    // Listen for message edits
+    // Messages read by admin
+    channelRef.current.bind('messages-read', (data) => {
+      if (data.readBy === 'admin') {
+        setMessages(prev => prev.map(msg => 
+          data.messageIds.includes(msg.id) ? { ...msg, status: 'read' } : msg
+        ));
+      }
+    });
+    
+    // Message edited
     channelRef.current.bind('message-edited', (data) => {
       setMessages(prev => prev.map(msg => 
         msg.id === data.id ? { ...msg, text: data.content, edited: true } : msg
       ));
     });
     
-    // Listen for message deletions
+    // Message deleted
     channelRef.current.bind('message-deleted', (data) => {
       setMessages(prev => prev.filter(msg => msg.id !== data.id));
     });
   };
 
-  // Play notification sound
   const playNotificationSound = () => {
     try {
       const audioContext = new (window.AudioContext || window.webkitAudioContext)();
@@ -162,18 +190,14 @@ const SupportChat = ({ onBack }) => {
       
       oscillator.start();
       setTimeout(() => oscillator.stop(), 150);
-    } catch (e) {
-      // Ignore audio errors
-    }
+    } catch (e) {}
   };
 
-  // Format message time
   const formatMessageTime = (dateString) => {
     const date = new Date(dateString);
     return `${date.getHours()}:${date.getMinutes().toString().padStart(2, '0')}`;
   };
 
-  // Format recording time
   const formatTime = (seconds) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
@@ -188,7 +212,6 @@ const SupportChat = ({ onBack }) => {
     scrollToBottom();
   }, [messages]);
 
-  // Mobile body lock
   useEffect(() => {
     const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
     
@@ -207,7 +230,6 @@ const SupportChat = ({ onBack }) => {
     };
   }, []);
 
-  // Close menu on outside click
   useEffect(() => {
     const handleClickOutside = () => {
       if (showMenu) {
@@ -220,9 +242,8 @@ const SupportChat = ({ onBack }) => {
     return () => document.removeEventListener('click', handleClickOutside);
   }, [showMenu]);
 
-  // Long press handlers
   const handleTouchStart = (e, msg) => {
-    if (msg.sender !== 'user') return; // Only user messages can be edited/deleted
+    if (msg.sender !== 'user') return;
     
     longPressTimer.current = setTimeout(() => {
       const rect = e.target.getBoundingClientRect();
@@ -249,36 +270,30 @@ const SupportChat = ({ onBack }) => {
     }
   };
 
-  // Delete message
   const handleDelete = async (e) => {
     e.stopPropagation();
     if (!selectedMessage) return;
     
     const msgId = selectedMessage.id;
     
-    // Optimistic update
     setMessages(messages.filter(m => m.id !== msgId));
     setShowMenu(false);
     setSelectedMessage(null);
     
     try {
       const token = authService.getToken();
-      const response = await fetch(`${API_URL}/messages/${msgId}`, {
+      await fetch(`${API_URL}/messages/${msgId}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`
         }
       });
-      
-      if (!response.ok) throw new Error('Failed to delete');
     } catch (error) {
       console.error('Error deleting message:', error);
-      // Reload conversation on error
       loadConversation();
     }
   };
 
-  // Edit message
   const handleEdit = (e) => {
     e.stopPropagation();
     if (selectedMessage) {
@@ -295,18 +310,15 @@ const SupportChat = ({ onBack }) => {
     const msgId = editingMessage.id;
     const newText = editText;
     
-    // Optimistic update
     setMessages(messages.map(m => 
-      m.id === msgId 
-        ? { ...m, text: newText, edited: true }
-        : m
+      m.id === msgId ? { ...m, text: newText, edited: true } : m
     ));
     setEditingMessage(null);
     setEditText('');
     
     try {
       const token = authService.getToken();
-      const response = await fetch(`${API_URL}/messages/${msgId}`, {
+      await fetch(`${API_URL}/messages/${msgId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -314,11 +326,8 @@ const SupportChat = ({ onBack }) => {
         },
         body: JSON.stringify({ content: newText })
       });
-      
-      if (!response.ok) throw new Error('Failed to edit');
     } catch (error) {
       console.error('Error editing message:', error);
-      // Reload conversation on error
       loadConversation();
     }
   };
@@ -328,19 +337,20 @@ const SupportChat = ({ onBack }) => {
     setEditText('');
   };
 
-  // Send text message
   const handleSend = async () => {
     if (!newMessage.trim() || sending) return;
 
     const tempId = Date.now();
     const time = formatMessageTime(new Date().toISOString());
+    const messageText = newMessage;
     
-    // Add message locally first (optimistic update)
+    // Optimistic update with 'sending' status
     const localMessage = {
       id: tempId,
-      text: newMessage,
+      text: messageText,
       sender: 'user',
-      time: time
+      time: time,
+      status: 'sending'
     };
     
     setMessages(prev => [...prev, localMessage]);
@@ -357,7 +367,7 @@ const SupportChat = ({ onBack }) => {
         },
         body: JSON.stringify({
           type: 'text',
-          content: newMessage
+          content: messageText
         })
       });
 
@@ -365,14 +375,13 @@ const SupportChat = ({ onBack }) => {
       
       const data = await response.json();
       
-      // Update with real ID
+      // Update to 'sent' status
       setMessages(prev => prev.map(m => 
-        m.id === tempId ? { ...m, id: data.message.id } : m
+        m.id === tempId ? { ...m, id: data.message.id, status: 'sent' } : m
       ));
       
     } catch (error) {
       console.error('Error sending message:', error);
-      // Remove failed message
       setMessages(prev => prev.filter(m => m.id !== tempId));
       alert('خطا در ارسال پیام');
     } finally {
@@ -398,7 +407,6 @@ const SupportChat = ({ onBack }) => {
     }
   };
 
-  // Upload image
   const handleImageUpload = async (e) => {
     const file = e.target.files[0];
     if (!file || !file.type.startsWith('image/')) return;
@@ -406,20 +414,19 @@ const SupportChat = ({ onBack }) => {
     const tempId = Date.now();
     const time = formatMessageTime(new Date().toISOString());
     
-    // Show local preview
     const reader = new FileReader();
     reader.onload = (event) => {
       const localMessage = {
         id: tempId,
         image: event.target.result,
         sender: 'user',
-        time: time
+        time: time,
+        status: 'sending'
       };
       setMessages(prev => [...prev, localMessage]);
     };
     reader.readAsDataURL(file);
 
-    // Upload to server
     try {
       const token = authService.getToken();
       const formData = new FormData();
@@ -437,7 +444,6 @@ const SupportChat = ({ onBack }) => {
       
       const uploadData = await uploadResponse.json();
 
-      // Send message with image URL
       const messageResponse = await fetch(`${API_URL}/conversation/message`, {
         method: 'POST',
         headers: {
@@ -454,9 +460,8 @@ const SupportChat = ({ onBack }) => {
       
       const messageData = await messageResponse.json();
       
-      // Update with real data
       setMessages(prev => prev.map(m => 
-        m.id === tempId ? { ...m, id: messageData.message.id, image: uploadData.url } : m
+        m.id === tempId ? { ...m, id: messageData.message.id, image: uploadData.url, status: 'sent' } : m
       ));
 
     } catch (error) {
@@ -472,7 +477,6 @@ const SupportChat = ({ onBack }) => {
     fileInputRef.current?.click();
   };
 
-  // Start recording
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -501,17 +505,16 @@ const SupportChat = ({ onBack }) => {
         const tempId = Date.now();
         const time = formatMessageTime(new Date().toISOString());
         
-        // Add local preview
         const localMessage = {
           id: tempId,
           audio: audioUrl,
           duration: duration,
           sender: 'user',
-          time: time
+          time: time,
+          status: 'sending'
         };
         setMessages(prev => [...prev, localMessage]);
 
-        // Upload to server
         try {
           const token = authService.getToken();
           const formData = new FormData();
@@ -529,7 +532,6 @@ const SupportChat = ({ onBack }) => {
           
           const uploadData = await uploadResponse.json();
 
-          // Send message
           const messageResponse = await fetch(`${API_URL}/conversation/message`, {
             method: 'POST',
             headers: {
@@ -547,9 +549,8 @@ const SupportChat = ({ onBack }) => {
           
           const messageData = await messageResponse.json();
           
-          // Update with real data
           setMessages(prev => prev.map(m => 
-            m.id === tempId ? { ...m, id: messageData.message.id, audio: uploadData.url } : m
+            m.id === tempId ? { ...m, id: messageData.message.id, audio: uploadData.url, status: 'sent' } : m
           ));
 
         } catch (error) {
@@ -575,7 +576,6 @@ const SupportChat = ({ onBack }) => {
     }
   };
 
-  // Stop recording
   const stopRecording = () => {
     if (mediaRecorderRef.current && isRecording) {
       mediaRecorderRef.current.stop();
@@ -584,7 +584,6 @@ const SupportChat = ({ onBack }) => {
     }
   };
 
-  // Toggle audio play
   const toggleAudioPlay = (msgId, audioUrl) => {
     const audio = audioRefs.current[msgId];
     
@@ -621,6 +620,25 @@ const SupportChat = ({ onBack }) => {
     } else {
       startRecording();
     }
+  };
+
+  // Render message status ticks
+  const renderMessageStatus = (msg) => {
+    if (msg.sender !== 'user') return null;
+    
+    const status = msg.status || 'sent';
+    
+    if (status === 'sending') {
+      return <span className="message-status sending">○</span>;
+    } else if (status === 'sent') {
+      return <Check size={14} className="message-status sent" />;
+    } else if (status === 'delivered') {
+      return <CheckCheck size={14} className="message-status delivered" />;
+    } else if (status === 'read') {
+      return <CheckCheck size={14} className="message-status read" />;
+    }
+    
+    return <Check size={14} className="message-status sent" />;
   };
 
   if (loading) {
@@ -753,6 +771,7 @@ const SupportChat = ({ onBack }) => {
             <span className="bubble-time">
               {msg.edited && <span className="edited-label">ویرایش شده • </span>}
               {msg.time}
+              {renderMessageStatus(msg)}
             </span>
           </div>
         ))}
