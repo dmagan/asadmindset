@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, ArrowLeft, Headphones, Trash2, Edit3, X, Paperclip, Mic, Square, Play, Pause, Check, CheckCheck } from 'lucide-react';
+import { Send, ArrowLeft, Headphones, Trash2, Edit3, X, Paperclip, Mic, Square, Play, Pause, Check, CheckCheck, Reply, CornerDownLeft, ArrowDown } from 'lucide-react';
 import Pusher from 'pusher-js';
 import { authService } from '../services/authService';
 
@@ -22,14 +22,24 @@ const SupportChat = ({ onBack }) => {
   const [editText, setEditText] = useState('');
   const [zoomedImage, setZoomedImage] = useState(null);
   
+  // Reply state
+  const [replyingTo, setReplyingTo] = useState(null);
+  
   // Recording states
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const [playingAudioId, setPlayingAudioId] = useState(null);
   const [audioCurrentTime, setAudioCurrentTime] = useState(0);
   
+  // Highlighted message for scroll to reply
+  const [highlightedMessageId, setHighlightedMessageId] = useState(null);
+  
+  // Scroll to bottom button
+  const [showScrollButton, setShowScrollButton] = useState(false);
+  
   // Refs
   const messagesEndRef = useRef(null);
+  const messagesAreaRef = useRef(null);
   const inputRef = useRef(null);
   const fileInputRef = useRef(null);
   const longPressTimer = useRef(null);
@@ -39,6 +49,35 @@ const SupportChat = ({ onBack }) => {
   const audioRefs = useRef({});
   const pusherRef = useRef(null);
   const channelRef = useRef(null);
+  const messageRefs = useRef({});
+  
+  // Scroll to message and highlight
+  const scrollToMessage = (messageId) => {
+    const messageElement = messageRefs.current[messageId];
+    if (messageElement) {
+      messageElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      setHighlightedMessageId(messageId);
+      // Vibrate on mobile
+      if (navigator.vibrate) {
+        navigator.vibrate(30);
+      }
+      setTimeout(() => setHighlightedMessageId(null), 2500);
+    }
+  };
+
+  // Scroll to bottom
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  // Handle scroll to show/hide scroll button
+  const handleScroll = () => {
+    if (messagesAreaRef.current) {
+      const { scrollTop, scrollHeight, clientHeight } = messagesAreaRef.current;
+      const isNearBottom = scrollHeight - scrollTop - clientHeight < 150;
+      setShowScrollButton(!isNearBottom);
+    }
+  };
 
   // Initialize
   useEffect(() => {
@@ -100,7 +139,13 @@ const SupportChat = ({ onBack }) => {
         sender: msg.sender === 'admin' ? 'support' : 'user',
         time: formatMessageTime(msg.createdAt),
         edited: msg.isEdited,
-        status: msg.status || 'sent'
+        status: msg.status || 'sent',
+        replyTo: msg.replyTo ? {
+          id: msg.replyTo.id,
+          type: msg.replyTo.type,
+          content: msg.replyTo.content,
+          sender: msg.replyTo.sender === 'admin' ? 'support' : 'user'
+        } : null
       }));
       
       setMessages(formattedMessages);
@@ -143,7 +188,13 @@ const SupportChat = ({ onBack }) => {
           sender: 'support',
           time: formatMessageTime(data.createdAt),
           edited: false,
-          status: 'delivered'
+          status: 'delivered',
+          replyTo: data.replyTo ? {
+            id: data.replyTo.id,
+            type: data.replyTo.type,
+            content: data.replyTo.content,
+            sender: data.replyTo.sender === 'admin' ? 'support' : 'user'
+          } : null
         };
         setMessages(prev => [...prev, newMsg]);
         playNotificationSound();
@@ -204,9 +255,6 @@ const SupportChat = ({ onBack }) => {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
 
   useEffect(() => {
     scrollToBottom();
@@ -243,8 +291,6 @@ const SupportChat = ({ onBack }) => {
   }, [showMenu]);
 
   const handleTouchStart = (e, msg) => {
-    if (msg.sender !== 'user') return;
-    
     longPressTimer.current = setTimeout(() => {
       const rect = e.target.getBoundingClientRect();
       
@@ -337,12 +383,30 @@ const SupportChat = ({ onBack }) => {
     setEditText('');
   };
 
+  // Reply handlers
+  const handleReply = (msg) => {
+    setReplyingTo({
+      id: msg.id,
+      type: msg.text ? 'text' : msg.image ? 'image' : 'audio',
+      content: msg.text || (msg.image ? '📷 تصویر' : '🎤 پیام صوتی'),
+      sender: msg.sender
+    });
+    setShowMenu(false);
+    setSelectedMessage(null);
+    inputRef.current?.focus();
+  };
+
+  const cancelReply = () => {
+    setReplyingTo(null);
+  };
+
   const handleSend = async () => {
     if (!newMessage.trim() || sending) return;
 
     const tempId = Date.now();
     const time = formatMessageTime(new Date().toISOString());
     const messageText = newMessage;
+    const replyTo = replyingTo;
     
     // Optimistic update with 'sending' status
     const localMessage = {
@@ -350,11 +414,13 @@ const SupportChat = ({ onBack }) => {
       text: messageText,
       sender: 'user',
       time: time,
-      status: 'sending'
+      status: 'sending',
+      replyTo: replyTo
     };
     
     setMessages(prev => [...prev, localMessage]);
     setNewMessage('');
+    setReplyingTo(null);
     setSending(true);
 
     try {
@@ -367,7 +433,8 @@ const SupportChat = ({ onBack }) => {
         },
         body: JSON.stringify({
           type: 'text',
-          content: messageText
+          content: messageText,
+          replyToId: replyTo?.id
         })
       });
 
@@ -413,6 +480,7 @@ const SupportChat = ({ onBack }) => {
 
     const tempId = Date.now();
     const time = formatMessageTime(new Date().toISOString());
+    const replyTo = replyingTo;
     
     const reader = new FileReader();
     reader.onload = (event) => {
@@ -421,11 +489,13 @@ const SupportChat = ({ onBack }) => {
         image: event.target.result,
         sender: 'user',
         time: time,
-        status: 'sending'
+        status: 'sending',
+        replyTo: replyTo
       };
       setMessages(prev => [...prev, localMessage]);
     };
     reader.readAsDataURL(file);
+    setReplyingTo(null);
 
     try {
       const token = authService.getToken();
@@ -452,7 +522,8 @@ const SupportChat = ({ onBack }) => {
         },
         body: JSON.stringify({
           type: 'image',
-          mediaUrl: uploadData.url
+          mediaUrl: uploadData.url,
+          replyToId: replyTo?.id
         })
       });
 
@@ -501,6 +572,7 @@ const SupportChat = ({ onBack }) => {
         const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
         const audioUrl = URL.createObjectURL(audioBlob);
         const duration = recordingTime;
+        const replyTo = replyingTo;
         
         const tempId = Date.now();
         const time = formatMessageTime(new Date().toISOString());
@@ -511,9 +583,11 @@ const SupportChat = ({ onBack }) => {
           duration: duration,
           sender: 'user',
           time: time,
-          status: 'sending'
+          status: 'sending',
+          replyTo: replyTo
         };
         setMessages(prev => [...prev, localMessage]);
+        setReplyingTo(null);
 
         try {
           const token = authService.getToken();
@@ -541,7 +615,8 @@ const SupportChat = ({ onBack }) => {
             body: JSON.stringify({
               type: 'audio',
               mediaUrl: uploadData.url,
-              duration: duration
+              duration: duration,
+              replyToId: replyTo?.id
             })
           });
 
@@ -684,16 +759,20 @@ const SupportChat = ({ onBack }) => {
       </div>
 
       {/* Messages Area */}
-      <div className="chat-messages-area">
+      <div 
+        className="chat-messages-area"
+        ref={messagesAreaRef}
+        onScroll={handleScroll}
+      >
         {messages.map((msg) => (
           <div
             key={msg.id}
-            className={`chat-bubble-glass ${msg.sender === 'user' ? 'user-bubble' : 'support-bubble'} ${selectedMessage?.id === msg.id ? 'selected' : ''} ${msg.image ? 'image-bubble' : ''} ${msg.audio ? 'audio-bubble' : ''}`}
+            ref={el => messageRefs.current[msg.id] = el}
+            className={`chat-bubble-glass ${msg.sender === 'user' ? 'user-bubble' : 'support-bubble'} ${selectedMessage?.id === msg.id ? 'selected' : ''} ${msg.image ? 'image-bubble' : ''} ${msg.audio ? 'audio-bubble' : ''} ${highlightedMessageId === msg.id ? 'highlighted' : ''}`}
             onTouchStart={(e) => handleTouchStart(e, msg)}
             onTouchEnd={handleTouchEnd}
             onTouchMove={handleTouchMove}
             onContextMenu={(e) => {
-              if (msg.sender !== 'user') return;
               e.preventDefault();
               setSelectedMessage(msg);
               setMenuPosition({ y: e.clientY - 60 });
@@ -701,13 +780,36 @@ const SupportChat = ({ onBack }) => {
             }}
             onClick={(e) => {
               const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-              if (!isMobile && msg.sender === 'user' && !msg.image && !msg.audio) {
+              if (!isMobile) {
                 setSelectedMessage(msg);
                 setMenuPosition({ y: e.clientY - 60 });
                 setShowMenu(true);
               }
             }}
           >
+            {/* Reply Preview */}
+            {msg.replyTo && (
+              <div 
+                className="reply-preview-bubble clickable"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  scrollToMessage(msg.replyTo.id);
+                }}
+              >
+                <div className="reply-line"></div>
+                <div className="reply-content">
+                  <span className="reply-sender">
+                    {msg.replyTo.sender === 'support' ? 'پشتیبانی' : 'شما'}
+                  </span>
+                  <span className="reply-text">
+                    {msg.replyTo.type === 'text' 
+                      ? (msg.replyTo.content?.substring(0, 40) + (msg.replyTo.content?.length > 40 ? '...' : ''))
+                      : msg.replyTo.content}
+                  </span>
+                </div>
+              </div>
+            )}
+            
             {msg.image ? (
               <img 
                 src={msg.image} 
@@ -779,22 +881,28 @@ const SupportChat = ({ onBack }) => {
       </div>
 
       {/* Menu Popup */}
-      {showMenu && selectedMessage?.sender === 'user' && (
+      {showMenu && selectedMessage && (
         <div 
           className="message-menu-glass"
           style={{ top: `${menuPosition.y}px` }}
           onClick={(e) => e.stopPropagation()}
         >
-          {!selectedMessage?.image && !selectedMessage?.audio && (
+          <button className="menu-item-btn" onClick={() => handleReply(selectedMessage)}>
+            <Reply size={18} />
+            <span>پاسخ</span>
+          </button>
+          {selectedMessage?.sender === 'user' && !selectedMessage?.image && !selectedMessage?.audio && (
             <button className="menu-item-btn" onClick={handleEdit}>
               <Edit3 size={18} />
               <span>ویرایش</span>
             </button>
           )}
-          <button className="menu-item-btn delete" onClick={handleDelete}>
-            <Trash2 size={18} />
-            <span>حذف</span>
-          </button>
+          {selectedMessage?.sender === 'user' && (
+            <button className="menu-item-btn delete" onClick={handleDelete}>
+              <Trash2 size={18} />
+              <span>حذف</span>
+            </button>
+          )}
         </div>
       )}
 
@@ -841,8 +949,36 @@ const SupportChat = ({ onBack }) => {
         </div>
       )}
 
+      {/* Scroll to Bottom Button */}
+      {showScrollButton && (
+        <button className="scroll-to-bottom-btn" onClick={scrollToBottom}>
+          <ArrowDown size={20} />
+        </button>
+      )}
+
       {/* Input Area */}
       <div className="chat-input-container-glass">
+        {/* Reply Bar */}
+        {replyingTo && (
+          <div className="reply-bar-glass">
+            <div className="reply-bar-content">
+              <CornerDownLeft size={16} />
+              <div className="reply-bar-text">
+                <span className="reply-bar-sender">
+                  پاسخ به {replyingTo.sender === 'support' ? 'پشتیبانی' : 'خودتان'}
+                </span>
+                <span className="reply-bar-message">
+                  {replyingTo.content?.substring(0, 35) || '📎 فایل'}
+                  {replyingTo.content?.length > 35 ? '...' : ''}
+                </span>
+              </div>
+            </div>
+            <button className="reply-bar-close" onClick={cancelReply}>
+              <X size={18} />
+            </button>
+          </div>
+        )}
+        
         <div className="chat-input-wrapper-glass">
           {!isRecording && (
             <>
