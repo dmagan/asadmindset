@@ -31,8 +31,37 @@ const CutifyGlassDemo = () => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(102);
   const [showUploadModal, setShowUploadModal] = useState(false);
+  
+  // State برای ذخیره صفحه‌ای که کاربر می‌خواست بره و نیاز به لاگین داشت
+  const [pendingTab, setPendingTab] = useState(null);
 
   const { user, isLoggedIn, loading } = useAuth();
+
+  // تابع برای تغییر تب با چک کردن لاگین
+  const handleTabChange = (tab) => {
+    // اگر تب نیاز به لاگین داره و کاربر لاگین نیست
+    const protectedTabs = ['support']; // تب‌هایی که نیاز به لاگین دارن
+    
+    if (protectedTabs.includes(tab) && !isLoggedIn) {
+      // ذخیره تب مقصد و نمایش صفحه لاگین
+      setPendingTab(tab);
+      setActiveTab('profile'); // رفتن به صفحه لاگین
+    } else {
+      setActiveTab(tab);
+    }
+  };
+
+  // تابعی که بعد از لاگین موفق صدا زده میشه
+  const handleLoginSuccess = () => {
+    if (pendingTab) {
+      // اگر صفحه‌ای منتظر بود، برو به اون صفحه
+      setActiveTab(pendingTab);
+      setPendingTab(null);
+    } else {
+      // اگر نه، برو به صفحه اصلی
+      setActiveTab('home');
+    }
+  };
 
   const totalDuration = 11 * 60;
 
@@ -80,7 +109,7 @@ const CutifyGlassDemo = () => {
               border: '1px solid rgba(255,255,255,0.12)',
               margin: '20px 16px'
             }}>
-              <LoginCard onSuccess={() => setActiveTab('home')} />
+              <LoginCard onSuccess={handleLoginSuccess} />
 
             </div>
           </div>
@@ -263,7 +292,7 @@ if (activeTab === 'projects') {
               </button>
               <button 
                 className={`nav-item-ios ${activeTab === 'support' ? 'active' : ''}`}
-                onClick={() => setActiveTab('support')}
+                onClick={() => handleTabChange('support')}
               >
                 <Headphones size={22} strokeWidth={activeTab === 'support' ? 2.5 : 1.5} />
                 <span>Support</span>

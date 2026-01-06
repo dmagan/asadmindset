@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, ArrowLeft, Headphones, Trash2, Edit3, X, Paperclip, Mic, Square, Play, Pause, Check, CheckCheck, Reply, CornerDownLeft, ArrowDown } from 'lucide-react';
+import { Send, ArrowLeft, Headphones, Trash2, Edit3, X, Paperclip, Mic, Square, Play, Pause, Check, CheckCheck, Reply, CornerDownLeft, ArrowDown, Video, Image, Loader2 } from 'lucide-react';
 import Pusher from 'pusher-js';
 import { authService } from '../services/authService';
 
@@ -21,6 +21,12 @@ const SupportChat = ({ onBack }) => {
   const [editingMessage, setEditingMessage] = useState(null);
   const [editText, setEditText] = useState('');
   const [zoomedImage, setZoomedImage] = useState(null);
+  const [zoomedVideo, setZoomedVideo] = useState(null);
+  
+  // Video upload states
+  const [uploadingVideo, setUploadingVideo] = useState(false);
+  const [uploadingTempId, setUploadingTempId] = useState(null);
+  const [showAttachMenu, setShowAttachMenu] = useState(false);
   
   // Reply state
   const [replyingTo, setReplyingTo] = useState(null);
@@ -30,6 +36,7 @@ const SupportChat = ({ onBack }) => {
   const [recordingTime, setRecordingTime] = useState(0);
   const [playingAudioId, setPlayingAudioId] = useState(null);
   const [audioCurrentTime, setAudioCurrentTime] = useState(0);
+  const [playbackSpeed, setPlaybackSpeed] = useState(1);
   
   // Highlighted message for scroll to reply
   const [highlightedMessageId, setHighlightedMessageId] = useState(null);
@@ -42,6 +49,8 @@ const SupportChat = ({ onBack }) => {
   const messagesAreaRef = useRef(null);
   const inputRef = useRef(null);
   const fileInputRef = useRef(null);
+  const videoInputRef = useRef(null);
+  const uploadXhrRef = useRef(null);
   const longPressTimer = useRef(null);
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
@@ -134,6 +143,7 @@ const SupportChat = ({ onBack }) => {
         id: msg.id,
         text: msg.type === 'text' ? msg.content : null,
         image: msg.type === 'image' ? msg.mediaUrl : null,
+        video: msg.type === 'video' ? msg.mediaUrl : null,
         audio: msg.type === 'audio' ? msg.mediaUrl : null,
         duration: msg.duration || 0,
         sender: msg.sender === 'admin' ? 'support' : 'user',
@@ -141,11 +151,13 @@ const SupportChat = ({ onBack }) => {
         edited: msg.isEdited,
         status: msg.status || 'sent',
         replyTo: msg.replyTo ? {
-          id: msg.replyTo.id,
-          type: msg.replyTo.type,
-          content: msg.replyTo.content,
-          sender: msg.replyTo.sender === 'admin' ? 'support' : 'user'
-        } : null
+  id: msg.replyTo.id,
+  type: msg.replyTo.type,
+  content: msg.replyTo.type === 'text' ? msg.replyTo.content : 
+           msg.replyTo.type === 'image' ? '📷 تصویر' : 
+           msg.replyTo.type === 'video' ? '🎬 ویدیو' : '🎤 پیام صوتی',
+  sender: msg.replyTo.sender === 'admin' ? 'support' : 'user'
+} : null
       }));
       
       setMessages(formattedMessages);
@@ -183,6 +195,7 @@ const SupportChat = ({ onBack }) => {
           id: data.id,
           text: data.type === 'text' ? data.content : null,
           image: data.type === 'image' ? data.mediaUrl : null,
+          video: data.type === 'video' ? data.mediaUrl : null,
           audio: data.type === 'audio' ? data.mediaUrl : null,
           duration: data.duration || 0,
           sender: 'support',
@@ -387,8 +400,8 @@ const SupportChat = ({ onBack }) => {
   const handleReply = (msg) => {
     setReplyingTo({
       id: msg.id,
-      type: msg.text ? 'text' : msg.image ? 'image' : 'audio',
-      content: msg.text || (msg.image ? '📷 تصویر' : '🎤 پیام صوتی'),
+      type: msg.text ? 'text' : msg.image ? 'image' : msg.video ? 'video' : 'audio',
+      content: msg.text || (msg.image ? '📷 تصویر' : msg.video ? '🎬 ویدیو' : '🎤 پیام صوتی'),
       sender: msg.sender
     });
     setShowMenu(false);
@@ -545,7 +558,150 @@ const SupportChat = ({ onBack }) => {
   };
 
   const handleAttachClick = () => {
+    setShowAttachMenu(!showAttachMenu);
+  };
+
+  const handleImageSelect = () => {
+    setShowAttachMenu(false);
     fileInputRef.current?.click();
+  };
+
+  const handleVideoSelect = () => {
+    setShowAttachMenu(false);
+    videoInputRef.current?.click();
+  };
+
+  // Video upload with progress
+  const handleVideoUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    // Check file size (max 50MB)
+    const maxSize = 50 * 1024 * 1024;
+    if (file.size > maxSize) {
+      alert('حجم ویدیو نباید بیشتر از ۵۰ مگابایت باشد');
+      e.target.value = '';
+      return;
+    }
+
+    const tempId = Date.now();
+    const time = formatMessageTime(new Date().toISOString());
+    const replyTo = replyingTo;
+
+    setUploadingVideo(true);
+    setUploadingTempId(tempId);
+    setReplyingTo(null);
+
+    // Create temp message
+    const localMessage = {
+      id: tempId,
+      video: URL.createObjectURL(file),
+      sender: 'user',
+      time: time,
+      status: 'uploading',
+      isUploading: true,
+      uploadProgress: 0,
+      replyTo: replyTo
+    };
+    setMessages(prev => [...prev, localMessage]);
+
+    try {
+      const token = authService.getToken();
+      
+      // Upload with progress using XHR
+      const uploadResult = await new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        uploadXhrRef.current = xhr;
+        
+        const formData = new FormData();
+        formData.append('file', file);
+
+        xhr.upload.addEventListener('progress', (event) => {
+          if (event.lengthComputable) {
+            const progress = Math.round((event.loaded / event.total) * 100);
+            setMessages(prev => prev.map(m => 
+              m.id === tempId ? { ...m, uploadProgress: progress } : m
+            ));
+          }
+        });
+
+        xhr.addEventListener('load', () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            try {
+              const response = JSON.parse(xhr.responseText);
+              resolve(response);
+            } catch (e) {
+              reject(new Error('پاسخ نامعتبر'));
+            }
+          } else {
+            reject(new Error(`خطای سرور: ${xhr.status}`));
+          }
+        });
+
+        xhr.addEventListener('error', () => reject(new Error('خطای شبکه')));
+        xhr.addEventListener('abort', () => reject(new Error('آپلود کنسل شد')));
+        xhr.addEventListener('timeout', () => reject(new Error('زمان آپلود تمام شد')));
+
+        xhr.timeout = 300000;
+        xhr.open('POST', `${API_URL}/upload`);
+        xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+        xhr.send(formData);
+      });
+
+      // Send video message
+      const messageResponse = await fetch(`${API_URL}/conversation/message`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          type: 'video',
+          mediaUrl: uploadResult.url,
+          replyToId: replyTo?.id
+        })
+      });
+
+      if (!messageResponse.ok) throw new Error('خطا در ارسال ویدیو');
+      
+      const messageData = await messageResponse.json();
+      
+      setMessages(prev => prev.map(m => 
+        m.id === tempId ? { 
+          ...m, 
+          id: messageData.message.id, 
+          video: uploadResult.url, 
+          status: 'sent',
+          isUploading: false,
+          uploadProgress: 100
+        } : m
+      ));
+
+    } catch (error) {
+      console.error('Error uploading video:', error);
+      if (error.message !== 'آپلود کنسل شد') {
+        alert('خطا در آپلود ویدیو: ' + error.message);
+      }
+      setMessages(prev => prev.filter(m => m.id !== tempId));
+    } finally {
+      setUploadingVideo(false);
+      setUploadingTempId(null);
+      uploadXhrRef.current = null;
+      e.target.value = '';
+    }
+  };
+
+  // Cancel video upload
+  const cancelVideoUpload = () => {
+    if (uploadXhrRef.current) {
+      uploadXhrRef.current.abort();
+      uploadXhrRef.current = null;
+    }
+    if (uploadingTempId) {
+      setMessages(prev => prev.filter(m => m.id !== uploadingTempId));
+    }
+    setUploadingVideo(false);
+    setUploadingTempId(null);
   };
 
   const startRecording = async () => {
@@ -666,19 +822,41 @@ const SupportChat = ({ onBack }) => {
       audio?.pause();
       setPlayingAudioId(null);
       setAudioCurrentTime(0);
+      setPlaybackSpeed(1);
     } else {
       if (playingAudioId && audioRefs.current[playingAudioId]) {
         audioRefs.current[playingAudioId].pause();
         audioRefs.current[playingAudioId].currentTime = 0;
       }
       setAudioCurrentTime(0);
+      setPlaybackSpeed(1);
       
       if (audio) {
+        audio.playbackRate = 1;
         audio.play()
           .then(() => setPlayingAudioId(msgId))
           .catch(err => console.error('Play error:', err));
       }
     }
+  };
+
+  // Toggle playback speed: 1x -> 1.5x -> 2x -> 1x
+  const togglePlaybackSpeed = (e, msgId) => {
+    e.stopPropagation();
+    const audio = audioRefs.current[msgId];
+    if (!audio) return;
+
+    let newSpeed;
+    if (playbackSpeed === 1) {
+      newSpeed = 1.5;
+    } else if (playbackSpeed === 1.5) {
+      newSpeed = 2;
+    } else {
+      newSpeed = 1;
+    }
+    
+    audio.playbackRate = newSpeed;
+    setPlaybackSpeed(newSpeed);
   };
 
   const handleMicOrSend = (e) => {
@@ -804,13 +982,62 @@ const SupportChat = ({ onBack }) => {
                   <span className="reply-text">
                     {msg.replyTo.type === 'text' 
                       ? (msg.replyTo.content?.substring(0, 40) + (msg.replyTo.content?.length > 40 ? '...' : ''))
+                      : msg.replyTo.type === 'video' ? '🎬 ویدیو'
                       : msg.replyTo.content}
                   </span>
                 </div>
               </div>
             )}
             
-            {msg.image ? (
+            {/* Video Message */}
+            {msg.video ? (
+              <div className="video-message-container">
+                {msg.isUploading ? (
+                  <div className="video-uploading-mobile">
+                    <Loader2 size={28} className="spinning" />
+                    <div className="upload-progress-bar-mobile">
+                      <div 
+                        className="upload-progress-fill-mobile" 
+                        style={{ width: `${msg.uploadProgress || 0}%` }}
+                      />
+                    </div>
+                    <span className="upload-progress-text-mobile">{msg.uploadProgress || 0}%</span>
+                    <button 
+                      className="cancel-upload-btn-mobile"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        cancelVideoUpload();
+                      }}
+                    >
+                      <X size={16} />
+                      <span>انصراف</span>
+                    </button>
+                  </div>
+                ) : (
+                  <div 
+                    className="video-thumbnail-mobile"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setZoomedVideo(msg.video);
+                    }}
+                  >
+                    <video 
+                      src={msg.video + '#t=0.5'}
+                      className="chat-video-preview"
+                      preload="metadata"
+                      muted
+                      playsInline
+                      onLoadedData={(e) => {
+                        e.target.currentTime = 0.5;
+                      }}
+                    />
+                    <div className="video-play-overlay-mobile">
+                      <Play size={36} fill="white" />
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : msg.image ? (
               <img 
                 src={msg.image} 
                 alt="uploaded" 
@@ -847,6 +1074,14 @@ const SupportChat = ({ onBack }) => {
                     : formatTime(Math.floor(audioRefs.current[msg.id]?.duration || msg.duration || 0))
                   }
                 </span>
+                {playingAudioId === msg.id && (
+                  <button 
+                    className="audio-speed-btn"
+                    onClick={(e) => togglePlaybackSpeed(e, msg.id)}
+                  >
+                    {playbackSpeed}x
+                  </button>
+                )}
                 <audio 
                   ref={el => audioRefs.current[msg.id] = el}
                   src={msg.audio}
@@ -949,6 +1184,22 @@ const SupportChat = ({ onBack }) => {
         </div>
       )}
 
+      {/* Video Modal */}
+      {zoomedVideo && (
+        <div className="video-zoom-overlay" onClick={() => setZoomedVideo(null)}>
+          <button className="zoom-close-btn" onClick={() => setZoomedVideo(null)}>
+            <X size={24} />
+          </button>
+          <video 
+            src={zoomedVideo} 
+            controls 
+            autoPlay
+            className="zoomed-video"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      )}
+
       {/* Scroll to Bottom Button */}
       {showScrollButton && (
         <button className="scroll-to-bottom-btn" onClick={scrollToBottom}>
@@ -981,10 +1232,28 @@ const SupportChat = ({ onBack }) => {
         
         <div className="chat-input-wrapper-glass">
           {!isRecording && (
-            <>
+            <div className="attach-menu-container-mobile">
               <button className="chat-attach-btn" onClick={handleAttachClick}>
                 <Paperclip size={22} />
               </button>
+              
+              {showAttachMenu && (
+                <div className="attach-menu-mobile">
+                  <button className="attach-menu-item-mobile" onClick={handleImageSelect}>
+                    <Image size={20} />
+                    <span>تصویر</span>
+                  </button>
+                  <button 
+                    className="attach-menu-item-mobile" 
+                    onClick={handleVideoSelect}
+                    disabled={uploadingVideo}
+                  >
+                    <Video size={20} />
+                    <span>ویدیو</span>
+                  </button>
+                </div>
+              )}
+              
               <input
                 type="file"
                 ref={fileInputRef}
@@ -992,7 +1261,14 @@ const SupportChat = ({ onBack }) => {
                 accept="image/*"
                 style={{ display: 'none' }}
               />
-            </>
+              <input
+                type="file"
+                ref={videoInputRef}
+                onChange={handleVideoUpload}
+                accept="video/*"
+                style={{ display: 'none' }}
+              />
+            </div>
           )}
           
           {isRecording ? (
@@ -1010,7 +1286,7 @@ const SupportChat = ({ onBack }) => {
               onKeyDown={handleKeyDown}
               className="chat-input-glass"
               rows={1}
-              disabled={sending}
+              disabled={sending || uploadingVideo}
             />
           )}
           
@@ -1018,7 +1294,7 @@ const SupportChat = ({ onBack }) => {
             className={`chat-send-btn-glass ${isRecording ? 'recording' : ''}`}
             onTouchEnd={handleMicOrSend}
             onMouseDown={handleMicOrSend}
-            disabled={sending}
+            disabled={sending || uploadingVideo}
           >
             {newMessage.trim() ? (
               <Send size={20} />
