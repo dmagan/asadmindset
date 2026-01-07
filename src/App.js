@@ -9,6 +9,8 @@ import LoginCard from './components/LoginCard';
 import ProfileCard from './components/ProfileCard';
 import ProjectsPage from './components/ProjectsPage';
 import SupportChat from './components/SupportChat';
+import AlphaPage from './components/AlphaPage';
+import AlphaChannel from './components/AlphaChannel';
 
 
 import { 
@@ -137,6 +139,14 @@ if (activeTab === 'projects') {
       return (
         <SupportChat onBack={() => setActiveTab('home')} />
       );
+    }
+    // صفحه آلفا
+    if (activeTab === 'alpha') {
+      return <AlphaPage onBack={() => setActiveTab('home')} onOpenChannel={() => setActiveTab('alphaChannel')} />;
+    }
+    // صفحه کانال آلفا
+    if (activeTab === 'alphaChannel') {
+      return <AlphaChannel onBack={() => setActiveTab('alpha')} />;
     }
     // صفحه اصلی
     return (

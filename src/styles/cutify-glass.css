@@ -100,7 +100,7 @@ html, body {
         .bg-overlay {
           position: absolute;
           inset: 0;
-          background: rgba(0, 0, 0, 0.19);
+          background: rgba(0, 0, 0, 0.295);
           z-index: 1;
         }
 
@@ -288,7 +288,7 @@ html, body {
           border-radius: 28px;
           
           /* افکت شیشه‌ای قوی */
-          background: rgba(255, 255, 255, 0.116);
+          background: rgba(0, 0, 0, 0.116);
           backdrop-filter: blur(4px) saturate(100%);
           -webkit-backdrop-filter: blur(4px) saturate(100%);
           
@@ -2240,7 +2240,7 @@ background: rgba(255, 255, 255, 0.067);
 .attach-menu-mobile {
   position: absolute;
   bottom: 100%;
-  right: 0;
+  right: 1;
   margin-bottom: 10px;
   background: rgba(30, 30, 40, 0.95);
   backdrop-filter: blur(20px);

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, ArrowLeft, Headphones, Trash2, Edit3, X, Paperclip, Mic, Square, Play, Pause, Check, CheckCheck, Reply, CornerDownLeft, ArrowDown, Video, Image, Loader2 } from 'lucide-react';
+import { Send, ArrowLeft, Headphones, Trash2, Edit3, X, Paperclip, Mic, Square, Play, Pause, Check, CheckCheck, Reply, CornerDownLeft, ArrowDown, Video, Image, Loader2, ChevronLeft } from 'lucide-react';
 import Pusher from 'pusher-js';
 import { authService } from '../services/authService';
 
@@ -27,6 +27,19 @@ const SupportChat = ({ onBack }) => {
   const [uploadingVideo, setUploadingVideo] = useState(false);
   const [uploadingTempId, setUploadingTempId] = useState(null);
   const [showAttachMenu, setShowAttachMenu] = useState(false);
+  
+  
+  // بستن منو با کلیک بیرون
+useEffect(() => {
+  const handleClickOutside = (e) => {
+    if (showAttachMenu && !e.target.closest('.attach-menu-container-mobile')) {
+      setShowAttachMenu(false);
+    }
+  };
+  
+  document.addEventListener('click', handleClickOutside);
+  return () => document.removeEventListener('click', handleClickOutside);
+}, [showAttachMenu]);
   
   // Reply state
   const [replyingTo, setReplyingTo] = useState(null);
@@ -920,21 +933,21 @@ const SupportChat = ({ onBack }) => {
 
   return (
     <div className="support-chat-container">
-      {/* Header */}
-      <div className="chat-header-glass">
-        <button className="chat-back-btn" onClick={onBack}>
-          <ArrowLeft size={22} />
-        </button>
-        <div className="chat-header-info">
-          <div className="chat-header-text">
-            <span className="chat-header-title">پشتیبانی</span>
-            <span className="chat-header-status">آنلاین</span>
-          </div>
-          <div className="chat-avatar-glass">
-            <Headphones size={20} />
+     {/* Header */}
+        <div className="chat-header-glass">
+          <button className="chat-back-btn" onClick={onBack}>
+            <ChevronLeft size={22} />
+          </button>
+          <div className="chat-header-info">
+            <div className="chat-header-text">
+              <span className="chat-header-title">پشتیبانی</span>
+<span className="chat-header-status">آنلاین</span>
+            </div>
+            <div className="chat-avatar-glass">
+                            <Headphones size={20} />
+            </div>
           </div>
         </div>
-      </div>
 
       {/* Messages Area */}
       <div 
@@ -1124,7 +1137,7 @@ const SupportChat = ({ onBack }) => {
         >
           <button className="menu-item-btn" onClick={() => handleReply(selectedMessage)}>
             <Reply size={18} />
-            <span>پاسخ</span>
+            <span>Reply</span>
           </button>
           {selectedMessage?.sender === 'user' && !selectedMessage?.image && !selectedMessage?.audio && (
             <button className="menu-item-btn" onClick={handleEdit}>
@@ -1241,7 +1254,7 @@ const SupportChat = ({ onBack }) => {
                 <div className="attach-menu-mobile">
                   <button className="attach-menu-item-mobile" onClick={handleImageSelect}>
                     <Image size={20} />
-                    <span>تصویر</span>
+                    <span>Photo</span>
                   </button>
                   <button 
                     className="attach-menu-item-mobile" 
@@ -1249,7 +1262,7 @@ const SupportChat = ({ onBack }) => {
                     disabled={uploadingVideo}
                   >
                     <Video size={20} />
-                    <span>ویدیو</span>
+                    <span>Video</span>
                   </button>
                 </div>
               )}
