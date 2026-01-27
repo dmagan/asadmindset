@@ -290,7 +290,7 @@ if (activeTab === 'projects') {
         {renderContent()}
 
         {/* Bottom Navigation - مخفی در صفحه پشتیبانی */}
-        {activeTab !== 'support' && (
+        {activeTab !== 'support' && activeTab !== 'alphaChannel' && (
           <div className="bottom-nav-glass">
             <div className="nav-items">
               <button 

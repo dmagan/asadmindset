@@ -2065,7 +2065,7 @@ background: rgba(255, 255, 255, 0.067);
 .scroll-to-bottom-btn {
   position: absolute;
   bottom: 90px;
-  left: 50%;
+  left: 93%;
   transform: translateX(-50%);
   width: 40px;
   height: 40px;

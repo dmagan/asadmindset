@@ -11,7 +11,8 @@ import {
   X,
   Bell,
   Loader2,
-  RefreshCw
+  RefreshCw,
+  ArrowDown
 } from 'lucide-react';
 import Pusher from 'pusher-js';
 import { authService } from '../services/authService';
@@ -55,10 +56,14 @@ const AlphaChannel = ({ onBack }) => {
   
   // Refs
   const containerRef = useRef(null);
+  const postsEndRef = useRef(null);
   const audioRefs = useRef({});
   const pusherRef = useRef(null);
   const channelRef = useRef(null);
   const notificationChannelRef = useRef(null);
+  
+  // Scroll to bottom button
+  const [showScrollButton, setShowScrollButton] = useState(false);
 
   // Load posts
   const loadPosts = useCallback(async (pageNum = 1, append = false) => {
@@ -260,13 +265,33 @@ const AlphaChannel = ({ onBack }) => {
     };
   }, [loadPosts, loadNotifications, loadUnreadCount, connectPusher]);
 
-  // Infinite scroll
+  // Scroll to bottom after initial posts load
+  useEffect(() => {
+    if (!loading && posts.length > 0) {
+      // Small delay to ensure DOM is updated
+      setTimeout(() => {
+        postsEndRef.current?.scrollIntoView({ behavior: 'auto' });
+      }, 100);
+    }
+  }, [loading]);
+
+  // Scroll to bottom
+  const scrollToBottom = () => {
+    postsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  // Handle scroll - for infinite scroll (load older posts at top) and show/hide scroll button
   const handleScroll = () => {
-    if (!containerRef.current || loadingMore || !hasMore) return;
+    if (!containerRef.current) return;
     
     const { scrollTop, scrollHeight, clientHeight } = containerRef.current;
     
-    if (scrollHeight - scrollTop - clientHeight < 300) {
+    // Show scroll button when not at bottom
+    const isNearBottom = scrollHeight - scrollTop - clientHeight < 150;
+    setShowScrollButton(!isNearBottom);
+    
+    // Load more posts when scrolling to TOP (older posts)
+    if (scrollTop < 300 && !loadingMore && hasMore) {
       loadPosts(page + 1, true);
     }
   };
@@ -572,13 +597,20 @@ const AlphaChannel = ({ onBack }) => {
         ref={containerRef}
         onScroll={handleScroll}
       >
-        {/* Refresh button */}
-        <button className="refresh-btn" onClick={() => loadPosts(1, false)}>
-          <RefreshCw size={18} />
-          <span>بروزرسانی</span>
-        </button>
+        {/* Loading more indicator at top */}
+        {loadingMore && (
+          <div className="loading-more">
+            <Loader2 size={24} className="spinning" />
+          </div>
+        )}
+        
+        {/* No more posts - at top */}
+        {!hasMore && posts.length > 0 && (
+          <div className="no-more-posts">پست‌های بیشتری وجود ندارد</div>
+        )}
 
-        {posts.map((post) => (
+        {/* Posts - reversed so newest is at bottom */}
+        {[...posts].reverse().map((post) => (
           <div 
             key={post.id} 
             className={`channel-post-card ${post.isPinned ? 'pinned' : ''}`}
@@ -622,18 +654,6 @@ const AlphaChannel = ({ onBack }) => {
           </div>
         ))}
         
-        {/* Loading more indicator */}
-        {loadingMore && (
-          <div className="loading-more">
-            <Loader2 size={24} className="spinning" />
-          </div>
-        )}
-        
-        {/* No more posts */}
-        {!hasMore && posts.length > 0 && (
-          <div className="no-more-posts">پست‌های بیشتری وجود ندارد</div>
-        )}
-        
         {/* Empty state */}
         {!loading && posts.length === 0 && (
           <div className="empty-channel">
@@ -641,7 +661,17 @@ const AlphaChannel = ({ onBack }) => {
             <p>هنوز پستی منتشر نشده است</p>
           </div>
         )}
+        
+        {/* Ref for scrolling to bottom */}
+        <div ref={postsEndRef} />
       </div>
+      
+      {/* Scroll to Bottom Button */}
+      {showScrollButton && (
+        <button className="scroll-to-bottom-btn" onClick={scrollToBottom}>
+          <ArrowDown size={20} />
+        </button>
+      )}
 
       {/* Image Zoom Modal */}
       {zoomedImage && (
@@ -681,6 +711,9 @@ const AlphaChannel = ({ onBack }) => {
           overflow-x: hidden;
           padding: 16px;
           padding-bottom: 40px;
+          display: flex;
+          flex-direction: column;
+          gap: 16px;
           -webkit-overflow-scrolling: touch;
           scrollbar-width: none; /* Firefox */
           -ms-overflow-style: none; /* IE/Edge */
@@ -688,6 +721,41 @@ const AlphaChannel = ({ onBack }) => {
         
         .channel-posts-area::-webkit-scrollbar {
           display: none; /* Chrome/Safari */
+        }
+        
+        .channel-avatar {
+          overflow: hidden;
+          padding: 0;
+        }
+        
+        .channel-avatar-img {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+        }
+        
+        .scroll-to-bottom-btn {
+          position: absolute;
+          bottom: 67;
+          left : 93%;
+          width: 44px;
+          height: 44px;
+          border-radius: 50%;
+          background: rgba(99, 102, 241, 0.9);
+          backdrop-filter: blur(10px);
+          border: 1px solid rgba(255, 255, 255, 0.2);
+          color: #fff;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+          z-index: 100;
+          box-shadow: 0 4px 20px rgba(99, 102, 241, 0.4);
+          transition: all 0.3s ease;
+        }
+        
+        .scroll-to-bottom-btn:active {
+          transform: translateX(-50%) scale(0.9);
         }
         
         .refresh-btn {
@@ -719,7 +787,6 @@ const AlphaChannel = ({ onBack }) => {
           border: 1px solid rgba(255, 255, 255, 0.1);
           border-radius: 16px;
           padding: 16px;
-          margin-bottom: 16px;
           transition: all 0.2s;
         }
         

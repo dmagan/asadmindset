@@ -10,7 +10,10 @@ import {
   Crown,
   Star,
   ArrowLeft,
-  TrendingDown
+  TrendingDown,
+Infinity,
+Combine,
+Signal
 } from 'lucide-react';
 
 const AlphaPage = ({ onBack, onOpenChannel }) => {
@@ -34,6 +37,7 @@ const AlphaPage = ({ onBack, onOpenChannel }) => {
   }, []);
 
   const includedFeatures = [
+        'VIP',
     'سیگنال اسپات ( معرفی  آلت‌ کوین های پامپی برای آلت سیزن )',
     'میم‌کوین‌های پامپی', 
     'کپی‌ترید',
@@ -50,11 +54,11 @@ const AlphaPage = ({ onBack, onOpenChannel }) => {
         </button>
         <div className="chat-header-info">
           <div className="chat-header-text">
-            <span className="chat-header-title">گروه آلفا</span>
+            <span className="chat-header-title">Alfa Group</span>
             <span className="chat-header-status">Premium Trading</span>
           </div>
-          <div className="chat-avatar-glass" style={{ background: 'linear-gradient(135deg, #fbbf24, #f59e0b)' }}>
-            <Crown size={20} />
+          <div className="chat-avatar-glass channel-avatar-img-container">
+            <img src="/channel-avatar.jpg" alt="Alfa Group" className="channel-avatar-img" />
           </div>
         </div>
       </div>
@@ -66,8 +70,10 @@ const AlphaPage = ({ onBack, onOpenChannel }) => {
           {/* Hero Section */}
           <div className="quick-edit-card-glass" style={styles.heroCard}>
             <div style={styles.heroContent}>
-              <div style={styles.alphaLogo}>همه چیز برای موفقیت در کریپتو</div>
-                            <div style={styles.alphaLogo}>یکــجـــا</div>
+              <div style={styles.alphaLogo}>
+                            <div style={styles.alphaLogo}>به جمع آلفاها خوش آمدی </div>
+یادت باشه
+تو دیگه معمولی نیستی، حاله  در جمع آلفاها هستی</div>
 
               <p style={styles.heroText}></p>
             </div>
@@ -86,11 +92,11 @@ const AlphaPage = ({ onBack, onOpenChannel }) => {
             <div style={styles.featuresGrid}>
               <div style={styles.featureRow}>
                 <div style={styles.featureBox}>
-                  <Zap size={28} style={{ color: '#ffffff' }} />
-                  <span>میم‌کوین‌های پامپی</span>
+                  <Zap size={48} style={{ color: '#ffffff' }} />
+                  <span>معرفی میم‌کوین‌های پامپی</span>
                 </div>
                 <div style={styles.featureBox}>
-                  <TrendingUp size={28} style={{ color: '#ffffff' }} />
+                  <Signal size={48} style={{ color: '#ffffff' }} />
                   <span>سیگنال‌های کوتاه‌مدت و بلندمدت</span>
                 </div>
               </div>
@@ -116,21 +122,22 @@ const AlphaPage = ({ onBack, onOpenChannel }) => {
           </div>
 
           {/* Info Card */}
-          <div className="quick-edit-card-glass" style={styles.infoCard}>
-            <div style={styles.infoIcon}>
-              <Rocket size={28} />
-            </div>
-            <p style={styles.infoText}>
-              سیگنال‌ فیوچرز ما به‌صورت <strong>مداوم</strong> داده می‌شود تا آلفاها بتوانند 
-              کنار هم، با مدیریت سرمایه درست به یک <strong>درآمد ماهانه پایدار</strong> برسند.
-            </p>
-          </div>
+         <div className="quick-edit-card-glass" style={styles.infoCard}>
+  <div style={styles.infoIcon}>
+    <Infinity size={32} />
+  </div>
+  <p style={styles.infoText}>
+    سیگنال‌ فیوچرز ما به‌صورت <strong>مداوم</strong> داده می‌شود تا آلفاها بتوانند 
+    کنار هم، با مدیریت سرمایه درست به یک <strong>درآمد ماهانه پایدار</strong> برسند.
+  </p>
+</div>
+
 
        {/* Old Pricing */}
           <div className="quick-edit-card-glass" style={styles.oldPriceCard}>
             <div style={styles.oldPriceHeader}>
               <div style={styles.oldPriceIcon}>
-                <TrendingDown size={28} />
+<Combine size={28} />
               </div>
               <span style={styles.oldPriceTitle}>قبلاً هر بخش جدا بود:</span>
             </div>
@@ -154,7 +161,7 @@ const AlphaPage = ({ onBack, onOpenChannel }) => {
             </div>
 
             <div style={styles.priceHeader}>
-              <span style={styles.priceLabel}>همه خدمات ما فقط در یکجا</span>
+              <span style={styles.priceLabel}>حالا همه خدمات ما فقط در یکجا</span>
               <div style={styles.priceRow}>
                 <span style={styles.currency}>$</span>
                 <span style={styles.priceValue}>25</span>
@@ -189,6 +196,17 @@ const AlphaPage = ({ onBack, onOpenChannel }) => {
       </div>
 
       <style>{`
+        .channel-avatar-img-container {
+          overflow: hidden;
+          padding: 0 !important;
+        }
+        
+        .channel-avatar-img {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+        }
+        
         .alpha-content-area {
           flex: 1;
           overflow-y: auto;
