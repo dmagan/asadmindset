@@ -4,15 +4,22 @@ import {
   Heart, 
   Eye, 
   Pin, 
+  PinOff,
   Play, 
   Pause, 
-  Volume2, 
-  VolumeX,
   X,
-  Bell,
   Loader2,
-  RefreshCw,
-  ArrowDown
+  ArrowDown,
+  Plus,
+  Edit3,
+  Trash2,
+  Image,
+  Video,
+  Mic,
+  Send,
+  Square,
+  Reply,
+  CornerDownLeft
 } from 'lucide-react';
 import Pusher from 'pusher-js';
 import { authService } from '../services/authService';
@@ -47,12 +54,40 @@ const AlphaChannel = ({ onBack }) => {
   const [showNotifications, setShowNotifications] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   
+  // Check if user is admin
+  const isAdmin = authService.getUser()?.nicename === 'admin';
+  
   // Media states
   const [zoomedImage, setZoomedImage] = useState(null);
   const [zoomedVideo, setZoomedVideo] = useState(null);
   const [playingAudioId, setPlayingAudioId] = useState(null);
   const [audioCurrentTime, setAudioCurrentTime] = useState(0);
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
+  
+  // Admin modal states
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [editingPost, setEditingPost] = useState(null);
+  const [deletingPost, setDeletingPost] = useState(null);
+  const [pinMenuPost, setPinMenuPost] = useState(null);
+  const [showAttachMenu, setShowAttachMenu] = useState(false);
+  
+  // Reply state
+  const [replyingTo, setReplyingTo] = useState(null);
+  
+  // Create/Edit form states
+  const [content, setContent] = useState('');
+  const [mediaType, setMediaType] = useState(null);
+  const [mediaUrl, setMediaUrl] = useState('');
+  const [mediaFile, setMediaFile] = useState(null);
+  const [mediaPreview, setMediaPreview] = useState(null);
+  const [mediaDuration, setMediaDuration] = useState(0);
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [submitting, setSubmitting] = useState(false);
+  
+  // Recording states
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingTime, setRecordingTime] = useState(0);
   
   // Refs
   const containerRef = useRef(null);
@@ -61,9 +96,19 @@ const AlphaChannel = ({ onBack }) => {
   const pusherRef = useRef(null);
   const channelRef = useRef(null);
   const notificationChannelRef = useRef(null);
+  const fileInputRef = useRef(null);
+  const videoInputRef = useRef(null);
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
+  const recordingTimerRef = useRef(null);
+  const uploadXhrRef = useRef(null);
+  const inputRef = useRef(null);
   
   // Scroll to bottom button
   const [showScrollButton, setShowScrollButton] = useState(false);
+  const attachMenuRef = useRef(null);
+  const [highlightedPostId, setHighlightedPostId] = useState(null);
+
 
   // Load posts
   const loadPosts = useCallback(async (pageNum = 1, append = false) => {
@@ -144,7 +189,6 @@ const AlphaChannel = ({ onBack }) => {
     const pusher = getPusher();
     pusherRef.current = pusher;
     
-    // Only bind connection events once
     if (!pusher._alphaConnectionBound) {
       pusher.connection.bind('connected', () => {
         console.log('Pusher connected!');
@@ -155,7 +199,6 @@ const AlphaChannel = ({ onBack }) => {
       pusher._alphaConnectionBound = true;
     }
     
-    // Subscribe to alpha-channel if not already
     if (!alphaChannelInstance) {
       alphaChannelInstance = pusher.subscribe('alpha-channel');
       console.log('Subscribing to alpha-channel...');
@@ -166,7 +209,6 @@ const AlphaChannel = ({ onBack }) => {
     }
     channelRef.current = alphaChannelInstance;
     
-    // Bind events (unbind first to prevent duplicates)
     channelRef.current.unbind('new-post');
     channelRef.current.bind('new-post', (data) => {
       console.log('New post received:', data);
@@ -207,7 +249,6 @@ const AlphaChannel = ({ onBack }) => {
       ));
     });
     
-    // Notifications channel
     if (!notificationChannelInstance) {
       notificationChannelInstance = pusher.subscribe('alpha-notifications');
       console.log('Subscribing to alpha-notifications...');
@@ -259,38 +300,51 @@ const AlphaChannel = ({ onBack }) => {
     loadUnreadCount();
     connectPusher();
     
-    // Cleanup only unbinds local handlers, doesn't disconnect Pusher
-    return () => {
-      // Events will be re-bound on next mount
-    };
+    return () => {};
   }, [loadPosts, loadNotifications, loadUnreadCount, connectPusher]);
 
   // Scroll to bottom after initial posts load
   useEffect(() => {
     if (!loading && posts.length > 0) {
-      // Small delay to ensure DOM is updated
       setTimeout(() => {
         postsEndRef.current?.scrollIntoView({ behavior: 'auto' });
       }, 100);
     }
   }, [loading]);
 
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (attachMenuRef.current && !attachMenuRef.current.contains(event.target)) {
+        setShowAttachMenu(false);
+      }
+    };
+
+    if (showAttachMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+      document.addEventListener('touchstart', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+    };
+  }, [showAttachMenu]);
+
   // Scroll to bottom
   const scrollToBottom = () => {
     postsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
-  // Handle scroll - for infinite scroll (load older posts at top) and show/hide scroll button
+  // Handle scroll
   const handleScroll = () => {
     if (!containerRef.current) return;
     
     const { scrollTop, scrollHeight, clientHeight } = containerRef.current;
     
-    // Show scroll button when not at bottom
     const isNearBottom = scrollHeight - scrollTop - clientHeight < 150;
     setShowScrollButton(!isNearBottom);
     
-    // Load more posts when scrolling to TOP (older posts)
     if (scrollTop < 300 && !loadingMore && hasMore) {
       loadPosts(page + 1, true);
     }
@@ -301,7 +355,6 @@ const AlphaChannel = ({ onBack }) => {
     try {
       const token = authService.getToken();
       
-      // Optimistic update
       setPosts(prev => prev.map(p => {
         if (p.id === postId) {
           return {
@@ -324,14 +377,12 @@ const AlphaChannel = ({ onBack }) => {
       
       if (!response.ok) throw new Error('Failed to toggle reaction');
       
-      // Vibrate
       if (navigator.vibrate) {
         navigator.vibrate(30);
       }
       
     } catch (error) {
       console.error('Error toggling reaction:', error);
-      // Revert on error
       loadPosts(1, false);
     }
   };
@@ -421,16 +472,436 @@ const AlphaChannel = ({ onBack }) => {
     setPlaybackSpeed(newSpeed);
   };
 
+  // ============ ADMIN FUNCTIONS ============
+
+  // Reset form
+  const resetForm = () => {
+    setContent('');
+    setMediaType(null);
+    setMediaUrl('');
+    setMediaFile(null);
+    setMediaPreview(null);
+    setMediaDuration(0);
+    setUploading(false);
+    setUploadProgress(0);
+    setSubmitting(false);
+    setIsRecording(false);
+    setRecordingTime(0);
+    setReplyingTo(null);
+  };
+
+  // Open create modal
+  const openCreateModal = () => {
+    resetForm();
+    setEditingPost(null);
+    setShowCreateModal(true);
+  };
+
+  // Open edit modal
+  const openEditModal = (post) => {
+    resetForm();
+    setContent(post.content || '');
+    setMediaType(post.mediaType);
+    setMediaUrl(post.mediaUrl || '');
+    setMediaPreview(post.mediaUrl);
+    setMediaDuration(post.mediaDuration || 0);
+    setEditingPost(post);
+    setShowCreateModal(true);
+  };
+
+  // Close modal
+  const closeModal = () => {
+    if (uploading && uploadXhrRef.current) {
+      uploadXhrRef.current.abort();
+    }
+    if (isRecording) {
+      stopRecording();
+    }
+    resetForm();
+    setShowCreateModal(false);
+    setEditingPost(null);
+  };
+
+  // Handle reply
+  const handleReply = (post) => {
+    setReplyingTo(post);
+    // Focus on input
+    setTimeout(() => {
+      inputRef.current?.focus();
+    }, 100);
+  };
+
+  // Cancel reply
+  const cancelReply = () => {
+    setReplyingTo(null);
+  };
+
+  // Scroll to replied post
+  const scrollToPost = (postId) => {
+    document.getElementById(`post-${postId}`)?.scrollIntoView({ behavior: 'smooth' });
+    setHighlightedPostId(postId);
+    setTimeout(() => setHighlightedPostId(null), 2000);
+  };
+
+  // Get reply preview text
+  const getReplyPreview = (post) => {
+    if (post.content) {
+      return post.content.substring(0, 60) + (post.content.length > 60 ? '...' : '');
+    }
+    if (post.mediaType === 'image') return '🖼 تصویر';
+    if (post.mediaType === 'video') return '🎬 ویدیو';
+    if (post.mediaType === 'audio') return '🎵 صوت';
+    return '';
+  };
+
+  // Handle image select
+  const handleImageSelect = (e) => {
+    const file = e.target.files[0];
+    if (!file || !file.type.startsWith('image/')) return;
+    
+    setMediaFile(file);
+    setMediaType('image');
+    setMediaPreview(URL.createObjectURL(file));
+    setMediaUrl('');
+    e.target.value = '';
+  };
+
+  // Handle video select
+  const handleVideoSelect = (e) => {
+    const file = e.target.files[0];
+    if (!file || !file.type.startsWith('video/')) return;
+    
+    const maxSize = 50 * 1024 * 1024;
+    if (file.size > maxSize) {
+      alert('حجم ویدیو نباید بیشتر از ۵۰ مگابایت باشد');
+      e.target.value = '';
+      return;
+    }
+    
+    setMediaFile(file);
+    setMediaType('video');
+    setMediaPreview(URL.createObjectURL(file));
+    setMediaUrl('');
+    e.target.value = '';
+  };
+
+  // Start recording
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      
+      let mimeType = 'audio/webm';
+      let extension = 'webm';
+      
+      const mimeTypes = [
+        { mime: 'audio/webm;codecs=opus', ext: 'webm' },
+        { mime: 'audio/webm', ext: 'webm' },
+        { mime: 'audio/mp4', ext: 'm4a' },
+        { mime: 'audio/ogg;codecs=opus', ext: 'ogg' },
+        { mime: 'audio/wav', ext: 'wav' }
+      ];
+      
+      for (const type of mimeTypes) {
+        if (MediaRecorder.isTypeSupported(type.mime)) {
+          mimeType = type.mime;
+          extension = type.ext;
+          break;
+        }
+      }
+      
+      mediaRecorderRef.current = new MediaRecorder(stream, { mimeType });
+      audioChunksRef.current = [];
+
+      mediaRecorderRef.current.ondataavailable = (e) => {
+        audioChunksRef.current.push(e.data);
+      };
+
+      mediaRecorderRef.current.onstop = () => {
+        const actualMime = mediaRecorderRef.current.mimeType || mimeType;
+        const audioBlob = new Blob(audioChunksRef.current, { type: actualMime });
+        const audioUrl = URL.createObjectURL(audioBlob);
+        
+        const fileName = `recording_${Date.now()}.${extension}`;
+        const audioFile = new File([audioBlob], fileName, { type: actualMime });
+        
+        setMediaFile(audioFile);
+        setMediaType('audio');
+        setMediaPreview(audioUrl);
+        setMediaUrl('');
+        setMediaDuration(recordingTime);
+        
+        stream.getTracks().forEach(track => track.stop());
+      };
+
+      mediaRecorderRef.current.start();
+      setIsRecording(true);
+      
+      recordingTimerRef.current = setInterval(() => {
+        setRecordingTime(prev => prev + 1);
+      }, 1000);
+
+    } catch (err) {
+      console.error('Microphone error:', err);
+      alert('لطفاً دسترسی به میکروفن را فعال کنید');
+    }
+  };
+
+  // Stop recording
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+      clearInterval(recordingTimerRef.current);
+    }
+  };
+
+  // Remove media
+  const removeMedia = () => {
+    setMediaFile(null);
+    setMediaType(null);
+    setMediaPreview(null);
+    setMediaUrl('');
+    setMediaDuration(0);
+  };
+
+  // Upload media with progress
+  const uploadMediaWithProgress = (file, onProgress) => {
+    return new Promise((resolve, reject) => {
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      const xhr = new XMLHttpRequest();
+      uploadXhrRef.current = xhr;
+      
+      xhr.upload.addEventListener('progress', (e) => {
+        if (e.lengthComputable) {
+          const percent = Math.round((e.loaded / e.total) * 100);
+          onProgress(percent);
+        }
+      });
+      
+      xhr.addEventListener('load', () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          const response = JSON.parse(xhr.responseText);
+          resolve(response);
+        } else {
+          reject(new Error('Upload failed'));
+        }
+      });
+      
+      xhr.addEventListener('error', () => reject(new Error('Upload failed')));
+      xhr.addEventListener('abort', () => reject(new Error('Upload cancelled')));
+      
+      const token = authService.getToken();
+      xhr.open('POST', `${API_URL}/admin/upload`);
+      xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+      xhr.send(formData);
+    });
+  };
+
+  // Submit form
+  const handleSubmit = async () => {
+    if (!content.trim() && !mediaFile && !mediaUrl) {
+      return;
+    }
+    
+    setSubmitting(true);
+    
+    try {
+      const token = authService.getToken();
+      let finalMediaUrl = mediaUrl;
+      
+      // Upload media if needed
+      if (mediaFile) {
+        setUploading(true);
+        const uploadResponse = await uploadMediaWithProgress(
+          mediaFile,
+          (progress) => setUploadProgress(progress)
+        );
+        finalMediaUrl = uploadResponse.url;
+        setUploading(false);
+      }
+      
+      const postData = {
+        content: content.trim(),
+        mediaType: mediaType,
+        mediaUrl: finalMediaUrl || null,
+        mediaDuration: mediaDuration,
+        replyToId: replyingTo?.id || null
+      };
+      
+      if (editingPost) {
+        // Update post
+        await fetch(`${API_URL}/admin/channel/posts/${editingPost.id}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify(postData)
+        });
+        setEditingPost(null);
+      } else {
+        // Create new post
+        await fetch(`${API_URL}/admin/channel/posts`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify(postData)
+        });
+      }
+      
+      // Reset form
+      resetForm();
+      setShowAttachMenu(false);
+      loadPosts(1, false);
+      
+      // Scroll to bottom after posting
+      setTimeout(() => {
+        postsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      }, 300);
+      
+    } catch (error) {
+      console.error('Error submitting post:', error);
+      alert('خطا در ثبت پست');
+    } finally {
+      setSubmitting(false);
+      setUploading(false);
+    }
+  };
+
+  // Delete post
+  const handleDelete = async () => {
+    if (!deletingPost) return;
+    
+    try {
+      const token = authService.getToken();
+      await fetch(`${API_URL}/admin/channel/posts/${deletingPost.id}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      setPosts(prev => prev.filter(p => p.id !== deletingPost.id));
+      setDeletingPost(null);
+    } catch (error) {
+      console.error('Error deleting post:', error);
+      alert('خطا در حذف پست');
+    }
+  };
+
+  // Toggle pin
+  const togglePin = async (post, duration = null) => {
+    // If unpinning, do it directly
+    if (post.isPinned) {
+      try {
+        const token = authService.getToken();
+        const response = await fetch(`${API_URL}/admin/channel/posts/${post.id}/pin`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        
+        if (!response.ok) throw new Error('Failed to toggle pin');
+        
+        const data = await response.json();
+        setPosts(prev => {
+          const updated = prev.map(p => 
+            p.id === post.id ? { ...p, isPinned: data.isPinned } : p
+          );
+          return updated.sort((a, b) => {
+            if (a.isPinned && !b.isPinned) return -1;
+            if (!a.isPinned && b.isPinned) return 1;
+            return new Date(b.createdAt) - new Date(a.createdAt);
+          });
+        });
+      } catch (error) {
+        console.error('Error toggling pin:', error);
+      }
+      return;
+    }
+    
+    // If pinning, check limit and show menu
+    const pinnedCount = posts.filter(p => p.isPinned).length;
+    if (pinnedCount >= 3) {
+      alert('حداکثر ۳ پست می‌توانند پین شوند');
+      return;
+    }
+    
+    // If no duration provided, show menu
+    if (!duration) {
+      setPinMenuPost(post);
+      return;
+    }
+    
+    // Pin with duration
+    try {
+      const token = authService.getToken();
+      const response = await fetch(`${API_URL}/admin/channel/posts/${post.id}/pin`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ duration })
+      });
+      
+      if (!response.ok) throw new Error('Failed to toggle pin');
+      
+      const data = await response.json();
+      setPosts(prev => {
+        const updated = prev.map(p => 
+          p.id === post.id ? { ...p, isPinned: data.isPinned } : p
+        );
+        return updated.sort((a, b) => {
+          if (a.isPinned && !b.isPinned) return -1;
+          if (!a.isPinned && b.isPinned) return 1;
+          return new Date(b.createdAt) - new Date(a.createdAt);
+        });
+      });
+    } catch (error) {
+      console.error('Error toggling pin:', error);
+    }
+  };
+
+  // Find replied post
+  const findRepliedPost = (replyToId) => {
+    return posts.find(p => p.id === replyToId);
+  };
+
   // Render post content based on type
   const renderPostContent = (post) => {
+    const repliedPost = post.replyToId ? findRepliedPost(post.replyToId) : null;
+    
     return (
       <>
-        {/* Text content */}
+        {/* Reply Reference */}
+        {repliedPost && (
+          <div 
+            className="reply-reference"
+            onClick={() => scrollToPost(repliedPost.id)}
+          >
+            <div className="reply-reference-bar" />
+            <div className="reply-reference-content">
+              <span className="reply-reference-label">
+                <CornerDownLeft size={12} />
+                پاسخ به
+              </span>
+              <p className="reply-reference-text">
+                {getReplyPreview(repliedPost)}
+              </p>
+            </div>
+          </div>
+        )}
+        
         {post.content && (
           <p className="post-text">{post.content}</p>
         )}
         
-        {/* Image */}
         {post.mediaType === 'image' && post.mediaUrl && (
           <div className="post-media">
             <img 
@@ -442,7 +913,6 @@ const AlphaChannel = ({ onBack }) => {
           </div>
         )}
         
-        {/* Video */}
         {post.mediaType === 'video' && post.mediaUrl && (
           <div className="post-media">
             <div 
@@ -463,7 +933,6 @@ const AlphaChannel = ({ onBack }) => {
           </div>
         )}
         
-        {/* Audio */}
         {post.mediaType === 'audio' && post.mediaUrl && (
           <div className={`audio-player ${playingAudioId === post.id ? 'playing' : ''}`}>
             <button 
@@ -544,50 +1013,59 @@ const AlphaChannel = ({ onBack }) => {
         <div className="chat-header-info">
           <div className="chat-header-text">
             <span className="chat-header-title">کانال آلفا</span>
-            <span className="chat-header-status">{posts.length} پست</span>
           </div>
           <div className="chat-avatar-glass" style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)' }}>
             📢
           </div>
         </div>
-        
-        {/* Notification Bell */}
-        <button 
-          className="notification-bell-btn"
-          onClick={() => {
-            setShowNotifications(!showNotifications);
-            if (!showNotifications) markAllRead();
-          }}
-        >
-          <Bell size={22} />
-          {unreadCount > 0 && (
-            <span className="notification-badge">{unreadCount > 9 ? '9+' : unreadCount}</span>
-          )}
-        </button>
       </div>
 
-      {/* Notifications Dropdown */}
-      {showNotifications && (
-        <div className="notifications-dropdown">
-          <div className="notifications-header">
-            <span>اعلان‌ها</span>
-            <button onClick={() => setShowNotifications(false)}>
-              <X size={18} />
-            </button>
-          </div>
-          <div className="notifications-list">
-            {notifications.length === 0 ? (
-              <div className="no-notifications">اعلانی وجود ندارد</div>
-            ) : (
-              notifications.map(n => (
-                <div key={n.id} className={`notification-item ${n.isRead ? '' : 'unread'}`}>
-                  <div className="notification-title">{n.title}</div>
-                  <div className="notification-message">{n.message}</div>
-                  <div className="notification-time">{formatTime(n.createdAt)}</div>
+      {/* Pinned Posts Bar */}
+      {posts.filter(p => p.isPinned).length > 0 && (
+        <div className="pinned-posts-container">
+          {posts.filter(p => p.isPinned).map(pinnedPost => (
+            <div 
+              key={pinnedPost.id}
+              className="pinned-post-bar"
+              onClick={() => {
+                document.getElementById(`post-${pinnedPost.id}`)?.scrollIntoView({ behavior: 'smooth' });
+                setHighlightedPostId(pinnedPost.id);
+                setTimeout(() => setHighlightedPostId(null), 2000);
+              }}
+            >
+              <div className="pinned-bar-icon">
+                <Pin size={16} />
+              </div>
+              <div className="pinned-bar-content">
+                <span className="pinned-bar-label">پیام پین شده</span>
+                <p className="pinned-bar-text">
+                  {pinnedPost.content?.substring(0, 50) || 
+                   (pinnedPost.mediaType === 'image' ? '🖼 تصویر' :
+                    pinnedPost.mediaType === 'video' ? '🎬 ویدیو' :
+                    pinnedPost.mediaType === 'audio' ? '🎵 صوت' : '')}
+                  {pinnedPost.content?.length > 50 ? '...' : ''}
+                </p>
+              </div>
+              {pinnedPost.mediaType === 'image' && (
+                <img 
+                  src={pinnedPost.mediaUrl} 
+                  className="pinned-bar-thumb"
+                  alt=""
+                />
+              )}
+              {pinnedPost.mediaType === 'video' && (
+                <div className="pinned-bar-thumb video-thumb">
+                  <video src={pinnedPost.mediaUrl + '#t=0.5'} />
+                  <Play size={14} />
                 </div>
-              ))
-            )}
-          </div>
+              )}
+              {pinnedPost.mediaType === 'audio' && (
+                <div className="pinned-bar-thumb audio-thumb">
+                  <Mic size={18} />
+                </div>
+              )}
+            </div>
+          ))}
         </div>
       )}
 
@@ -597,25 +1075,22 @@ const AlphaChannel = ({ onBack }) => {
         ref={containerRef}
         onScroll={handleScroll}
       >
-        {/* Loading more indicator at top */}
         {loadingMore && (
           <div className="loading-more">
             <Loader2 size={24} className="spinning" />
           </div>
         )}
         
-        {/* No more posts - at top */}
         {!hasMore && posts.length > 0 && (
           <div className="no-more-posts">پست‌های بیشتری وجود ندارد</div>
         )}
 
-        {/* Posts - reversed so newest is at bottom */}
         {[...posts].reverse().map((post) => (
           <div 
-            key={post.id} 
-            className={`channel-post-card ${post.isPinned ? 'pinned' : ''}`}
+            key={post.id}
+            id={`post-${post.id}`}
+            className={`channel-post-card ${post.isPinned ? 'pinned' : ''} ${highlightedPostId === post.id ? 'highlighted' : ''}`}
           >
-            {/* Pin indicator */}
             {post.isPinned && (
               <div className="pin-indicator">
                 <Pin size={14} />
@@ -623,12 +1098,10 @@ const AlphaChannel = ({ onBack }) => {
               </div>
             )}
             
-            {/* Post content */}
             <div className="post-content">
               {renderPostContent(post)}
             </div>
             
-            {/* Post footer */}
             <div className="post-footer">
               <div className="post-stats">
                 <span className="post-time">
@@ -643,18 +1116,53 @@ const AlphaChannel = ({ onBack }) => {
                 </div>
               </div>
               
-              <button 
-                className={`reaction-btn ${post.userReacted ? 'reacted' : ''}`}
-                onClick={() => toggleReaction(post.id, post.userReacted)}
-              >
-                <Heart size={20} fill={post.userReacted ? '#ef4444' : 'none'} />
-                <span>{post.reactionsCount}</span>
-              </button>
+              <div className="post-actions-row">
+                {/* Admin Actions */}
+                {isAdmin && (
+                  <div className="admin-actions">
+                    <button 
+                      className="admin-action-btn"
+                      onClick={() => handleReply(post)}
+                      title="پاسخ"
+                    >
+                      <Reply size={16} />
+                    </button>
+                    <button 
+                      className="admin-action-btn"
+                      onClick={() => togglePin(post)}
+                      title={post.isPinned ? 'برداشتن پین' : 'پین کردن'}
+                    >
+                      {post.isPinned ? <PinOff size={16} /> : <Pin size={16} />}
+                    </button>
+                    <button 
+                      className="admin-action-btn"
+                      onClick={() => openEditModal(post)}
+                      title="ویرایش"
+                    >
+                      <Edit3 size={16} />
+                    </button>
+                    <button 
+                      className="admin-action-btn delete"
+                      onClick={() => setDeletingPost(post)}
+                      title="حذف"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                )}
+                
+                <button 
+                  className={`reaction-btn ${post.userReacted ? 'reacted' : ''}`}
+                  onClick={() => toggleReaction(post.id, post.userReacted)}
+                >
+                  <Heart size={20} fill={post.userReacted ? '#ef4444' : 'none'} />
+                  <span>{post.reactionsCount}</span>
+                </button>
+              </div>
             </div>
           </div>
         ))}
         
-        {/* Empty state */}
         {!loading && posts.length === 0 && (
           <div className="empty-channel">
             <span className="empty-icon">📭</span>
@@ -662,7 +1170,6 @@ const AlphaChannel = ({ onBack }) => {
           </div>
         )}
         
-        {/* Ref for scrolling to bottom */}
         <div ref={postsEndRef} />
       </div>
       
@@ -671,6 +1178,146 @@ const AlphaChannel = ({ onBack }) => {
         <button className="scroll-to-bottom-btn" onClick={scrollToBottom}>
           <ArrowDown size={20} />
         </button>
+      )}
+
+      {/* Admin Input Area */}
+      {isAdmin && (
+        <div className="admin-input-container">
+          {/* Reply Preview */}
+          {replyingTo && (
+            <div className="reply-preview">
+              <div className="reply-preview-bar" />
+              <div className="reply-preview-content">
+                <span className="reply-preview-label">در پاسخ به:</span>
+                <p className="reply-preview-text">{getReplyPreview(replyingTo)}</p>
+              </div>
+              <button className="reply-cancel-btn" onClick={cancelReply}>
+                <X size={18} />
+              </button>
+            </div>
+          )}
+          
+          {/* Media Preview */}
+          {mediaPreview && (
+            <div className="input-media-preview">
+              {mediaType === 'image' && <img src={mediaPreview} alt="" />}
+              {mediaType === 'video' && <video src={mediaPreview} />}
+              {mediaType === 'audio' && (
+                <div className="input-audio-preview">
+                  <Mic size={20} />
+                  <span>{formatDuration(mediaDuration)}</span>
+                </div>
+              )}
+              <button className="remove-preview-btn" onClick={removeMedia}>
+                <X size={16} />
+              </button>
+            </div>
+          )}
+          
+          {/* Recording Indicator */}
+          {isRecording && (
+            <div className="input-recording">
+              <div className="recording-dot" />
+              <span>{formatDuration(recordingTime)}</span>
+              <span>در حال ضبط...</span>
+            </div>
+          )}
+          
+          {/* Upload Progress */}
+          {uploading && (
+            <div className="input-upload-progress">
+              <div className="progress-bar">
+                <div className="progress-fill" style={{ width: `${uploadProgress}%` }} />
+              </div>
+              <span>{uploadProgress}%</span>
+            </div>
+          )}
+          
+          <div className="admin-input-wrapper">
+            {/* Attach Button */}
+            {!isRecording && (
+              <div className="attach-menu-container" ref={attachMenuRef}>
+                <button 
+                  className="attach-btn"
+                  onClick={() => setShowAttachMenu(!showAttachMenu)}
+                >
+                  <Plus size={22} />
+                </button>
+                
+                {showAttachMenu && (
+                  <div className="attach-menu">
+                    <button onClick={() => { fileInputRef.current?.click(); setShowAttachMenu(false); }}>
+                      <Image size={20} />
+                      <span>تصویر</span>
+                    </button>
+                    <button onClick={() => { videoInputRef.current?.click(); setShowAttachMenu(false); }}>
+                      <Video size={20} />
+                      <span>ویدیو</span>
+                    </button>
+                  </div>
+                )}
+                
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={handleImageSelect}
+                  accept="image/*"
+                  style={{ display: 'none' }}
+                />
+                <input
+                  type="file"
+                  ref={videoInputRef}
+                  onChange={handleVideoSelect}
+                  accept="video/*"
+                  style={{ display: 'none' }}
+                />
+              </div>
+            )}
+            
+            {/* Text Input or Recording */}
+            {isRecording ? (
+              <div className="recording-display">
+                <div className="recording-dot" />
+                <span>{formatDuration(recordingTime)}</span>
+              </div>
+            ) : (
+              <textarea
+                ref={inputRef}
+                className="admin-input"
+                placeholder="پیام خود را بنویسید..."
+                value={content}
+                onChange={(e) => setContent(e.target.value)}
+                rows={1}
+                disabled={submitting || uploading}
+              />
+            )}
+            
+            {/* Send or Mic Button */}
+            <button 
+              className={`send-btn ${isRecording ? 'recording' : ''}`}
+              onClick={() => {
+                if (isRecording) {
+                  stopRecording();
+                } else if (content.trim() || mediaFile) {
+                  handleSubmit();
+                } else {
+                  startRecording();
+                }
+              }}
+              disabled={submitting || uploading}
+            >
+              {submitting ? (
+                <Loader2 size={20} className="spinning" />
+              ) : content.trim() || mediaFile ? (
+                <Send size={20} />
+              ) : isRecording ? (
+                <Square size={20} />
+              ) : (
+                <Mic size={20} />
+              )}
+            </button>
+          </div>
+        </div>
       )}
 
       {/* Image Zoom Modal */}
@@ -704,40 +1351,234 @@ const AlphaChannel = ({ onBack }) => {
         </div>
       )}
 
+      {/* Create/Edit Modal */}
+      {showCreateModal && (
+        <div className="modal-overlay" onClick={closeModal}>
+          <div className="modal-content" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>{editingPost ? 'ویرایش پست' : 'پست جدید'}</h2>
+              <button className="close-btn" onClick={closeModal}>
+                <X size={24} />
+              </button>
+            </div>
+            
+            <div className="modal-body">
+              <textarea
+                className="post-textarea"
+                placeholder="متن پست را بنویسید..."
+                value={content}
+                onChange={(e) => setContent(e.target.value)}
+                rows={5}
+              />
+              
+              {mediaPreview && (
+                <div className="media-preview">
+                  {mediaType === 'image' && (
+                    <img src={mediaPreview} alt="" />
+                  )}
+                  {mediaType === 'video' && (
+                    <video src={mediaPreview} controls />
+                  )}
+                  {mediaType === 'audio' && (
+                    <div className="audio-preview">
+                      <audio src={mediaPreview} controls />
+                      <span>مدت: {formatDuration(mediaDuration)}</span>
+                    </div>
+                  )}
+                  <button className="remove-media-btn" onClick={removeMedia}>
+                    <X size={20} />
+                  </button>
+                </div>
+              )}
+              
+              {uploading && (
+                <div className="upload-progress">
+                  <div className="progress-bar">
+                    <div className="progress-fill" style={{ width: `${uploadProgress}%` }} />
+                  </div>
+                  <span>{uploadProgress}%</span>
+                </div>
+              )}
+              
+              {isRecording && (
+                <div className="recording-indicator-modal">
+                  <div className="recording-dot" />
+                  <span>{formatDuration(recordingTime)}</span>
+                  <span>در حال ضبط...</span>
+                </div>
+              )}
+              
+              {!mediaPreview && !isRecording && (
+                <div className="media-buttons">
+                  <button 
+                    className="media-btn"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    <Image size={20} />
+                    <span>تصویر</span>
+                  </button>
+                  <button 
+                    className="media-btn"
+                    onClick={() => videoInputRef.current?.click()}
+                  >
+                    <Video size={20} />
+                    <span>ویدیو</span>
+                  </button>
+                  <button 
+                    className="media-btn"
+                    onClick={startRecording}
+                  >
+                    <Mic size={20} />
+                    <span>صدا</span>
+                  </button>
+                  
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handleImageSelect}
+                    accept="image/*"
+                    style={{ display: 'none' }}
+                  />
+                  <input
+                    type="file"
+                    ref={videoInputRef}
+                    onChange={handleVideoSelect}
+                    accept="video/*"
+                    style={{ display: 'none' }}
+                  />
+                </div>
+              )}
+              
+              {isRecording && (
+                <button className="stop-recording-btn" onClick={stopRecording}>
+                  <Square size={20} />
+                  <span>توقف ضبط</span>
+                </button>
+              )}
+            </div>
+            
+            <div className="modal-footer">
+              <button className="cancel-btn" onClick={closeModal}>
+                انصراف
+              </button>
+              <button 
+                className="submit-btn"
+                onClick={handleSubmit}
+                disabled={submitting || uploading || isRecording}
+              >
+                {submitting ? (
+                  <Loader2 size={20} className="spinning" />
+                ) : (
+                  <>
+                    <Send size={20} />
+                    <span>{editingPost ? 'ذخیره' : 'انتشار'}</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deletingPost && (
+        <div className="modal-overlay" onClick={() => setDeletingPost(null)}>
+          <div className="modal-content delete-modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>حذف پست</h2>
+              <button className="close-btn" onClick={() => setDeletingPost(null)}>
+                <X size={24} />
+              </button>
+            </div>
+            <div className="modal-body">
+              <p>آیا از حذف این پست اطمینان دارید؟</p>
+              <p className="warning-text">این عمل قابل بازگشت نیست.</p>
+            </div>
+            <div className="modal-footer">
+              <button className="cancel-btn" onClick={() => setDeletingPost(null)}>
+                انصراف
+              </button>
+              <button className="delete-btn" onClick={handleDelete}>
+                <Trash2 size={20} />
+                <span>حذف</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Pin Duration Modal */}
+      {pinMenuPost && (
+        <div className="modal-overlay" onClick={() => setPinMenuPost(null)}>
+          <div className="modal-content pin-modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>مدت زمان پین</h2>
+              <button className="close-btn" onClick={() => setPinMenuPost(null)}>
+                <X size={24} />
+              </button>
+            </div>
+            <div className="modal-body">
+              <p>این پست تا چه زمانی پین بماند؟</p>
+              <div className="pin-duration-options">
+                <button 
+                  className="pin-duration-btn"
+                  onClick={() => {
+                    togglePin(pinMenuPost, '24h');
+                    setPinMenuPost(null);
+                  }}
+                >
+                  <span className="duration-icon">🕐</span>
+                  <span className="duration-text">۲۴ ساعت</span>
+                </button>
+                <button 
+                  className="pin-duration-btn"
+                  onClick={() => {
+                    togglePin(pinMenuPost, '1w');
+                    setPinMenuPost(null);
+                  }}
+                >
+                  <span className="duration-icon">📅</span>
+                  <span className="duration-text">۱ هفته</span>
+                </button>
+                <button 
+                  className="pin-duration-btn"
+                  onClick={() => {
+                    togglePin(pinMenuPost, '30d');
+                    setPinMenuPost(null);
+                  }}
+                >
+                  <span className="duration-icon">📆</span>
+                  <span className="duration-text">۳۰ روز</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <style>{`
         .channel-posts-area {
           flex: 1;
           overflow-y: auto;
           overflow-x: hidden;
           padding: 16px;
-          padding-bottom: 40px;
+          padding-bottom: 80px;
           display: flex;
           flex-direction: column;
           gap: 16px;
           -webkit-overflow-scrolling: touch;
-          scrollbar-width: none; /* Firefox */
-          -ms-overflow-style: none; /* IE/Edge */
+          scrollbar-width: none;
+          -ms-overflow-style: none;
         }
         
         .channel-posts-area::-webkit-scrollbar {
-          display: none; /* Chrome/Safari */
-        }
-        
-        .channel-avatar {
-          overflow: hidden;
-          padding: 0;
-        }
-        
-        .channel-avatar-img {
-          width: 100%;
-          height: 100%;
-          object-fit: cover;
+          display: none;
         }
         
         .scroll-to-bottom-btn {
           position: absolute;
-          bottom: 67;
-          left : 93%;
+          bottom: 80px;
+          right: 16px;
           width: 44px;
           height: 44px;
           border-radius: 50%;
@@ -755,30 +1596,7 @@ const AlphaChannel = ({ onBack }) => {
         }
         
         .scroll-to-bottom-btn:active {
-          transform: translateX(-50%) scale(0.9);
-        }
-        
-        .refresh-btn {
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 8px;
-          width: 100%;
-          padding: 12px;
-          margin-bottom: 16px;
-          background: rgba(255, 255, 255, 0.05);
-          border: 1px solid rgba(255, 255, 255, 0.1);
-          border-radius: 12px;
-          color: rgba(255, 255, 255, 0.7);
-          font-family: 'Vazirmatn', sans-serif;
-          font-size: 14px;
-          cursor: pointer;
-          transition: all 0.2s;
-        }
-        
-        .refresh-btn:active {
-          background: rgba(255, 255, 255, 0.1);
-          transform: scale(0.98);
+          transform: scale(0.9);
         }
         
         .channel-post-card {
@@ -817,6 +1635,110 @@ const AlphaChannel = ({ onBack }) => {
           white-space: pre-wrap;
           word-wrap: break-word;
           margin: 0 0 12px 0;
+        }
+        
+        /* Reply Reference Styles */
+        .reply-reference {
+          display: flex;
+          align-items: stretch;
+          gap: 10px;
+          margin-bottom: 12px;
+          padding: 10px 12px;
+          background: rgba(99, 102, 241, 0.1);
+          border-radius: 10px;
+          cursor: pointer;
+          transition: background 0.2s;
+        }
+        
+        .reply-reference:active {
+          background: rgba(99, 102, 241, 0.2);
+        }
+        
+        .reply-reference-bar {
+          width: 3px;
+          background: #6366f1;
+          border-radius: 2px;
+          flex-shrink: 0;
+        }
+        
+        .reply-reference-content {
+          flex: 1;
+          min-width: 0;
+        }
+        
+        .reply-reference-label {
+          display: flex;
+          align-items: center;
+          gap: 4px;
+          font-size: 11px;
+          color: #a5b4fc;
+          margin-bottom: 4px;
+        }
+        
+        .reply-reference-text {
+          margin: 0;
+          font-size: 13px;
+          color: rgba(255, 255, 255, 0.7);
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        
+        /* Reply Preview in Input */
+        .reply-preview {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          margin-bottom: 12px;
+          padding: 10px 12px;
+          background: rgba(99, 102, 241, 0.15);
+          border-radius: 12px;
+        }
+        
+        .reply-preview-bar {
+          width: 3px;
+          height: 36px;
+          background: #6366f1;
+          border-radius: 2px;
+          flex-shrink: 0;
+        }
+        
+        .reply-preview-content {
+          flex: 1;
+          min-width: 0;
+        }
+        
+        .reply-preview-label {
+          font-size: 11px;
+          color: #a5b4fc;
+          margin-bottom: 2px;
+        }
+        
+        .reply-preview-text {
+          margin: 0;
+          font-size: 13px;
+          color: rgba(255, 255, 255, 0.8);
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        
+        .reply-cancel-btn {
+          width: 32px;
+          height: 32px;
+          border-radius: 50%;
+          background: rgba(255, 255, 255, 0.1);
+          border: none;
+          color: rgba(255, 255, 255, 0.7);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+          flex-shrink: 0;
+        }
+        
+        .reply-cancel-btn:active {
+          background: rgba(255, 255, 255, 0.2);
         }
         
         .post-media {
@@ -977,6 +1899,43 @@ const AlphaChannel = ({ onBack }) => {
           font-size: 12px;
         }
         
+        .post-actions-row {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+        }
+        
+        .admin-actions {
+          display: flex;
+          gap: 6px;
+        }
+        
+        .admin-action-btn {
+          width: 32px;
+          height: 32px;
+          border-radius: 8px;
+          background: rgba(255, 255, 255, 0.1);
+          border: none;
+          color: rgba(255, 255, 255, 0.7);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+          transition: all 0.2s;
+        }
+        
+        .admin-action-btn:active {
+          transform: scale(0.9);
+        }
+        
+        .admin-action-btn.delete {
+          color: #ef4444;
+        }
+        
+        .admin-action-btn.delete:hover {
+          background: rgba(239, 68, 68, 0.2);
+        }
+        
         .reaction-btn {
           display: flex;
           align-items: center;
@@ -1002,17 +1961,6 @@ const AlphaChannel = ({ onBack }) => {
         
         .reaction-btn.reacted svg {
           color: #ef4444;
-        }
-        
-        .notification-bell-btn {
-          position: relative;
-          background: transparent;
-          border: none;
-          color: white;
-          padding: 8px;
-          cursor: pointer;
-          margin-left: auto;
-          margin-right: 8px;
         }
         
         .notification-badge {
@@ -1182,6 +2130,702 @@ const AlphaChannel = ({ onBack }) => {
           max-width: 100%;
           max-height: 90vh;
           border-radius: 8px;
+        }
+        
+        /* Modal Styles */
+        .modal-overlay {
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background: rgba(0, 0, 0, 0.8);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          z-index: 1000;
+          padding: 20px;
+        }
+        
+        .modal-content {
+          width: 100%;
+          max-width: 500px;
+          max-height: 90vh;
+          background: rgba(30, 30, 45, 0.98);
+          backdrop-filter: blur(20px);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          border-radius: 20px;
+          overflow: hidden;
+          display: flex;
+          flex-direction: column;
+        }
+        
+        .modal-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 16px 20px;
+          border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .modal-header h2 {
+          margin: 0;
+          font-size: 18px;
+          color: white;
+        }
+        
+        .close-btn {
+          background: transparent;
+          border: none;
+          color: rgba(255, 255, 255, 0.7);
+          cursor: pointer;
+          padding: 4px;
+        }
+        
+        .modal-body {
+          padding: 20px;
+          overflow-y: auto;
+          flex: 1;
+        }
+        
+        .post-textarea {
+          width: 100%;
+          background: rgba(255, 255, 255, 0.05);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          border-radius: 12px;
+          padding: 14px;
+          color: white;
+          font-size: 15px;
+          font-family: inherit;
+          resize: none;
+          outline: none;
+        }
+        
+        .post-textarea:focus {
+          border-color: rgba(99, 102, 241, 0.5);
+        }
+        
+        .media-preview {
+          position: relative;
+          margin-top: 16px;
+          border-radius: 12px;
+          overflow: hidden;
+        }
+        
+        .media-preview img,
+        .media-preview video {
+          width: 100%;
+          max-height: 300px;
+          object-fit: cover;
+        }
+        
+        .audio-preview {
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+          padding: 16px;
+          background: rgba(255, 255, 255, 0.05);
+          border-radius: 12px;
+        }
+        
+        .audio-preview audio {
+          width: 100%;
+        }
+        
+        .audio-preview span {
+          color: rgba(255, 255, 255, 0.6);
+          font-size: 13px;
+        }
+        
+        .remove-media-btn {
+          position: absolute;
+          top: 8px;
+          right: 8px;
+          width: 32px;
+          height: 32px;
+          border-radius: 50%;
+          background: rgba(0, 0, 0, 0.6);
+          border: none;
+          color: white;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+        }
+        
+        .upload-progress {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          margin-top: 16px;
+        }
+        
+        .progress-bar {
+          flex: 1;
+          height: 6px;
+          background: rgba(255, 255, 255, 0.1);
+          border-radius: 3px;
+          overflow: hidden;
+        }
+        
+        .progress-fill {
+          height: 100%;
+          background: linear-gradient(135deg, #6366f1, #8b5cf6);
+          transition: width 0.3s;
+        }
+        
+        .upload-progress span {
+          color: rgba(255, 255, 255, 0.7);
+          font-size: 13px;
+          min-width: 40px;
+        }
+        
+        .recording-indicator-modal {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          margin-top: 16px;
+          padding: 16px;
+          background: rgba(239, 68, 68, 0.1);
+          border-radius: 12px;
+          color: #ef4444;
+        }
+        
+        .recording-dot {
+          width: 12px;
+          height: 12px;
+          background: #ef4444;
+          border-radius: 50%;
+          animation: pulse 1s ease-in-out infinite;
+        }
+        
+        @keyframes pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.5; }
+        }
+        
+        .media-buttons {
+          display: flex;
+          gap: 12px;
+          margin-top: 16px;
+        }
+        
+        .media-btn {
+          flex: 1;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 8px;
+          padding: 16px;
+          background: rgba(255, 255, 255, 0.05);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          border-radius: 12px;
+          color: rgba(255, 255, 255, 0.7);
+          cursor: pointer;
+          transition: all 0.2s;
+        }
+        
+        .media-btn:active {
+          transform: scale(0.95);
+          background: rgba(255, 255, 255, 0.1);
+        }
+        
+        .media-btn span {
+          font-size: 13px;
+        }
+        
+        .stop-recording-btn {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          width: 100%;
+          padding: 14px;
+          margin-top: 16px;
+          background: rgba(239, 68, 68, 0.2);
+          border: 1px solid rgba(239, 68, 68, 0.3);
+          border-radius: 12px;
+          color: #ef4444;
+          font-size: 15px;
+          cursor: pointer;
+        }
+        
+        .modal-footer {
+          display: flex;
+          gap: 12px;
+          padding: 16px 20px;
+          border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .cancel-btn {
+          flex: 1;
+          padding: 14px;
+          background: rgba(255, 255, 255, 0.1);
+          border: none;
+          border-radius: 12px;
+          color: white;
+          font-size: 15px;
+          cursor: pointer;
+        }
+        
+        .submit-btn {
+          flex: 2;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          padding: 14px;
+          background: linear-gradient(135deg, #6366f1, #8b5cf6);
+          border: none;
+          border-radius: 12px;
+          color: white;
+          font-size: 15px;
+          cursor: pointer;
+        }
+        
+        .submit-btn:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
+        }
+        
+        .delete-modal .modal-body p {
+          color: rgba(255, 255, 255, 0.8);
+          margin: 0 0 8px 0;
+        }
+        
+        .warning-text {
+          color: #ef4444 !important;
+          font-size: 13px;
+        }
+        
+        .delete-btn {
+          flex: 2;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          padding: 14px;
+          background: #ef4444;
+          border: none;
+          border-radius: 12px;
+          color: white;
+          font-size: 15px;
+          cursor: pointer;
+        }
+        
+        /* Admin Input Area Styles */
+        .admin-input-container {
+          position: absolute;
+          bottom: 0;
+          left: 0;
+          right: 0;
+          background: rgba(20, 20, 30, 0.95);
+          backdrop-filter: blur(20px);
+          border-top: 1px solid rgba(255, 255, 255, 0.1);
+          padding: 12px 16px;
+          padding-bottom: max(12px, env(safe-area-inset-bottom));
+        }
+        
+        .input-media-preview {
+          position: relative;
+          margin-bottom: 12px;
+          border-radius: 12px;
+          overflow: hidden;
+          max-height: 150px;
+        }
+        
+        .input-media-preview img,
+        .input-media-preview video {
+          width: 100%;
+          max-height: 150px;
+          object-fit: cover;
+        }
+        
+        .input-audio-preview {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 12px 16px;
+          background: rgba(99, 102, 241, 0.2);
+          border-radius: 12px;
+          color: #a5b4fc;
+        }
+        
+        .remove-preview-btn {
+          position: absolute;
+          top: 8px;
+          right: 8px;
+          width: 28px;
+          height: 28px;
+          border-radius: 50%;
+          background: rgba(0, 0, 0, 0.6);
+          border: none;
+          color: white;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+        }
+        
+        .input-recording {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          margin-bottom: 12px;
+          padding: 10px 14px;
+          background: rgba(239, 68, 68, 0.15);
+          border-radius: 12px;
+          color: #ef4444;
+          font-size: 14px;
+        }
+        
+        .input-upload-progress {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          margin-bottom: 12px;
+        }
+        
+        .admin-input-wrapper {
+          display: flex;
+          align-items: flex-end;
+          gap: 10px;
+        }
+        
+        .attach-menu-container {
+          position: relative;
+        }
+        
+        .attach-btn {
+          width: 44px;
+          height: 44px;
+          border-radius: 50%;
+          background: rgba(255, 255, 255, 0.1);
+          border: none;
+          color: rgba(255, 255, 255, 0.7);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+          transition: all 0.2s;
+        }
+        
+        .attach-btn:active {
+          transform: scale(0.9);
+          background: rgba(255, 255, 255, 0.15);
+        }
+        
+        .attach-menu {
+          position: absolute;
+          bottom: 54px;
+          left: 0;
+          background: rgba(30, 30, 45, 0.98);
+          backdrop-filter: blur(20px);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          border-radius: 14px;
+          overflow: hidden;
+          min-width: 140px;
+          box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
+        }
+        
+        .attach-menu button {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          width: 100%;
+          padding: 14px 18px;
+          background: transparent;
+          border: none;
+          color: rgba(255, 255, 255, 0.8);
+          font-size: 14px;
+          cursor: pointer;
+          transition: background 0.2s;
+        }
+        
+        .attach-menu button:active {
+          background: rgba(255, 255, 255, 0.1);
+        }
+        
+        .attach-menu button:not(:last-child) {
+          border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .admin-input {
+          flex: 1;
+          background: rgba(255, 255, 255, 0.08);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          border-radius: 22px;
+          padding: 12px 18px;
+          color: white;
+          font-size: 15px;
+          font-family: inherit;
+          resize: none;
+          outline: none;
+          max-height: 120px;
+          min-height: 44px;
+        }
+        
+        .admin-input:focus {
+          border-color: rgba(99, 102, 241, 0.5);
+        }
+        
+        .admin-input::placeholder {
+          color: rgba(255, 255, 255, 0.4);
+        }
+        
+        .recording-display {
+          flex: 1;
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          padding: 12px 18px;
+          background: rgba(239, 68, 68, 0.15);
+          border-radius: 22px;
+          color: #ef4444;
+        }
+        
+        .send-btn {
+          width: 44px;
+          height: 44px;
+          border-radius: 50%;
+          background: linear-gradient(135deg, #6366f1, #8b5cf6);
+          border: none;
+          color: white;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+          transition: all 0.2s;
+          flex-shrink: 0;
+        }
+        
+        .send-btn:active {
+          transform: scale(0.9);
+        }
+        
+        .send-btn.recording {
+          background: #ef4444;
+        }
+        
+        .send-btn:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
+        }
+
+        /* Pinned Posts Container */
+        .pinned-posts-container {
+          position: relative;
+          z-index: 50;
+          display: flex;
+          flex-direction: column;
+          background: rgba(255, 255, 255, 0.1);
+          backdrop-filter: blur(20px);
+          -webkit-backdrop-filter: blur(20px);
+          border: 1px solid rgba(255, 255, 255, 0.15);
+          border-radius: 16px;
+          margin: 16px;
+          margin-bottom: 0;
+          overflow: hidden;
+          max-height: 200px;
+          overflow-y: auto;
+          box-shadow: 0 8px 32px rgba(0, 0, 0, 1);
+        }
+        
+        .pinned-posts-container::-webkit-scrollbar {
+          display: none;
+        }
+
+        /* Pinned Post Bar */
+        .pinned-post-bar {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          padding: 12px 16px;
+          background: transparent;
+          cursor: pointer;
+          transition: all 0.2s;
+          border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .pinned-post-bar:last-child {
+          border-bottom: none;
+        }
+        
+        .pinned-post-bar:active {
+          background: rgba(255, 255, 255, 0.1);
+        }
+        
+        .pinned-bar-icon {
+          width: 36px;
+          height: 36px;
+          border-radius: 50%;
+          background: rgba(255, 255, 255, 0.15);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: #fff;
+          flex-shrink: 0;
+        }
+        
+        .pinned-bar-content {
+          flex: 1;
+          min-width: 0;
+          overflow: hidden;
+        }
+        
+        .pinned-bar-label {
+          font-size: 12px;
+          color: rgba(255, 255, 255, 0.6);
+          font-weight: 500;
+        }
+        
+        .pinned-bar-text {
+          margin: 4px 0 0 0;
+          font-size: 14px;
+          color: #fff;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        
+        .pinned-bar-thumb {
+          width: 44px;
+          height: 44px;
+          border-radius: 10px;
+          object-fit: cover;
+          flex-shrink: 0;
+          border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .pinned-bar-thumb.video-thumb {
+          position: relative;
+          background: rgba(0, 0, 0, 0.4);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+        
+        .pinned-bar-thumb.video-thumb video {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+          border-radius: 10px;
+        }
+        
+        .pinned-bar-thumb.video-thumb svg {
+          position: absolute;
+          color: white;
+          filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));
+        }
+        
+        .pinned-bar-thumb.audio-thumb {
+          background: rgba(255, 255, 255, 0.15);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: white;
+        }
+
+        /* Highlighted Post Animation */
+        .channel-post-card.highlighted {
+          animation: flashHighlight 2s ease-out;
+        }
+        
+        @keyframes flashHighlight {
+          0% {
+            background: rgba(99, 102, 241, 0.5);
+            box-shadow: 0 0 20px rgba(99, 102, 241, 0.5);
+          }
+          25% {
+            background: rgba(99, 102, 241, 0.3);
+            box-shadow: 0 0 15px rgba(99, 102, 241, 0.3);
+          }
+          50% {
+            background: rgba(99, 102, 241, 0.4);
+            box-shadow: 0 0 20px rgba(99, 102, 241, 0.4);
+          }
+          75% {
+            background: rgba(99, 102, 241, 0.2);
+            box-shadow: 0 0 10px rgba(99, 102, 241, 0.2);
+          }
+          100% {
+            background: rgba(255, 255, 255, 0.05);
+            box-shadow: none;
+          }
+        }
+        
+        .channel-post-card.pinned.highlighted {
+          animation: flashHighlightPinned 2s ease-out;
+        }
+        
+        @keyframes flashHighlightPinned {
+          0% {
+            background: rgba(99, 102, 241, 0.6);
+            box-shadow: 0 0 25px rgba(99, 102, 241, 0.6);
+          }
+          25% {
+            background: rgba(99, 102, 241, 0.4);
+            box-shadow: 0 0 18px rgba(99, 102, 241, 0.4);
+          }
+          50% {
+            background: rgba(99, 102, 241, 0.5);
+            box-shadow: 0 0 22px rgba(99, 102, 241, 0.5);
+          }
+          75% {
+            background: rgba(99, 102, 241, 0.25);
+            box-shadow: 0 0 12px rgba(99, 102, 241, 0.3);
+          }
+          100% {
+            background: rgba(99, 102, 241, 0.1);
+            box-shadow: none;
+          }
+        }
+
+        /* Pin Duration Modal */
+        .pin-modal {
+          max-width: 340px;
+        }
+        
+        .pin-modal .modal-body p {
+          color: rgba(255, 255, 255, 0.7);
+          margin-bottom: 20px;
+          text-align: center;
+        }
+        
+        .pin-duration-options {
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
+        }
+        
+        .pin-duration-btn {
+          display: flex;
+          align-items: center;
+          gap: 14px;
+          width: 100%;
+          padding: 16px 20px;
+          background: rgba(255, 255, 255, 0.08);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          border-radius: 14px;
+          color: white;
+          font-size: 15px;
+          cursor: pointer;
+          transition: all 0.2s;
+        }
+        
+        .pin-duration-btn:active {
+          transform: scale(0.98);
+          background: rgba(99, 102, 241, 0.2);
+          border-color: rgba(99, 102, 241, 0.4);
+        }
+        
+        .duration-icon {
+          font-size: 24px;
+        }
+        
+        .duration-text {
+          flex: 1;
+          text-align: right;
         }
       `}</style>
     </div>
