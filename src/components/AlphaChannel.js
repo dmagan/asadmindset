@@ -1014,8 +1014,8 @@ const AlphaChannel = ({ onBack }) => {
           <div className="chat-header-text">
             <span className="chat-header-title">کانال آلفا</span>
           </div>
-          <div className="chat-avatar-glass" style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)' }}>
-            📢
+          <div className="chat-avatar-glass channel-avatar-img-container">
+            <img src="/channel-avatar.jpg" alt="Alfa Group" className="channel-avatar-img" />
           </div>
         </div>
       </div>
@@ -1320,18 +1320,30 @@ const AlphaChannel = ({ onBack }) => {
         </div>
       )}
 
-      {/* Image Zoom Modal */}
+      {/* Image Zoom Modal with Pinch-to-Zoom */}
       {zoomedImage && (
         <div className="image-zoom-overlay" onClick={() => setZoomedImage(null)}>
           <button className="zoom-close-btn" onClick={() => setZoomedImage(null)}>
             <X size={24} />
           </button>
-          <img 
-            src={zoomedImage} 
-            alt="" 
-            className="zoomed-image"
+          <div 
+            className="pinch-zoom-container"
             onClick={(e) => e.stopPropagation()}
-          />
+            onDoubleClick={(e) => {
+              const img = e.currentTarget.querySelector('img');
+              if (img.style.transform === 'scale(2)') {
+                img.style.transform = 'scale(1)';
+              } else {
+                img.style.transform = 'scale(2)';
+              }
+            }}
+          >
+            <img 
+              src={zoomedImage} 
+              alt="" 
+              className="zoomed-image pinch-zoom-image"
+            />
+          </div>
         </div>
       )}
 
@@ -1557,6 +1569,18 @@ const AlphaChannel = ({ onBack }) => {
       )}
 
       <style>{`
+        .channel-avatar-img-container {
+          overflow: hidden;
+          padding: 0 !important;
+          border-radius: 50%;
+        }
+        
+        .channel-avatar-img {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+        }
+        
         .channel-posts-area {
           flex: 1;
           overflow-y: auto;
@@ -1592,11 +1616,6 @@ const AlphaChannel = ({ onBack }) => {
           cursor: pointer;
           z-index: 100;
           box-shadow: 0 4px 20px rgba(99, 102, 241, 0.4);
-          transition: all 0.3s ease;
-        }
-        
-        .scroll-to-bottom-btn:active {
-          transform: scale(0.9);
         }
         
         .channel-post-card {
@@ -2124,6 +2143,26 @@ const AlphaChannel = ({ onBack }) => {
           max-height: 90vh;
           object-fit: contain;
           border-radius: 8px;
+        }
+        
+        .pinch-zoom-container {
+          width: 100%;
+          height: 100%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          overflow: hidden;
+          touch-action: pan-x pan-y pinch-zoom;
+        }
+        
+        .pinch-zoom-image {
+          transition: transform 0.3s ease;
+          touch-action: pinch-zoom;
+          cursor: zoom-in;
+        }
+        
+        .pinch-zoom-image[style*="scale(2)"] {
+          cursor: zoom-out;
         }
         
         .zoomed-video {

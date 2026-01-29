@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import UploadModal from './UploadModal';
 import IOSAddToHome from './IOSAddToHome';
@@ -9,8 +9,16 @@ import LoginCard from './components/LoginCard';
 import ProfileCard from './components/ProfileCard';
 import ProjectsPage from './components/ProjectsPage';
 import SupportChat from './components/SupportChat';
+import AdminConversations from './components/AdminConversations';
+import AdminChatView from './components/AdminChatView';
 import AlphaPage from './components/AlphaPage';
 import AlphaChannel from './components/AlphaChannel';
+import { authService } from './services/authService';
+import Pusher from 'pusher-js';
+
+const API_URL = 'https://asadmindset.com/wp-json/asadmindset/v1';
+const PUSHER_KEY = '71815fd9e2b90f89a57b';
+const PUSHER_CLUSTER = 'eu';
 
 
 import { 
@@ -36,8 +44,138 @@ const CutifyGlassDemo = () => {
   
   // State برای ذخیره صفحه‌ای که کاربر می‌خواست بره و نیاز به لاگین داشت
   const [pendingTab, setPendingTab] = useState(null);
+  
+  // State برای ذخیره conversation انتخاب شده توسط ادمین
+  const [selectedConversationId, setSelectedConversationId] = useState(null);
+  
+  // State برای تعداد پیام‌های خوانده نشده
+  const [unreadCount, setUnreadCount] = useState(0);
+  
+  // Ref برای Pusher
+  const pusherRef = useRef(null);
+  const channelRef = useRef(null);
 
   const { user, isLoggedIn, loading } = useAuth();
+  
+  // چک کردن اینکه کاربر ادمین هست یا نه
+  const isAdmin = authService.getUser()?.nicename === 'admin';
+
+  // دریافت تعداد پیام‌های خوانده نشده
+  const fetchUnreadCount = async () => {
+    if (!isLoggedIn) {
+      setUnreadCount(0);
+      return;
+    }
+    
+    try {
+      const token = authService.getToken();
+      
+      if (isAdmin) {
+        // برای ادمین: مجموع پیام‌های خوانده نشده از همه کاربران
+        const response = await fetch(`${API_URL}/admin/conversations`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (response.ok) {
+          const conversations = await response.json();
+          const totalUnread = conversations.reduce((sum, conv) => sum + (conv.unreadCount || 0), 0);
+          setUnreadCount(totalUnread);
+        }
+      } else {
+        // برای کاربر عادی: پیام‌های خوانده نشده از ادمین
+        const response = await fetch(`${API_URL}/conversation`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (response.ok) {
+          const data = await response.json();
+          // شمارش پیام‌های ادمین که هنوز خوانده نشدن
+          const unreadMessages = data.messages.filter(
+            msg => msg.sender === 'admin' && msg.status !== 'read'
+          );
+          setUnreadCount(unreadMessages.length);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching unread count:', error);
+    }
+  };
+
+  // اتصال به Pusher برای دریافت پیام‌های جدید
+  const connectPusher = async () => {
+    if (!isLoggedIn || pusherRef.current) return;
+    
+    const token = authService.getToken();
+    
+    pusherRef.current = new Pusher(PUSHER_KEY, {
+      cluster: PUSHER_CLUSTER,
+      forceTLS: true
+    });
+    
+    if (isAdmin) {
+      // ادمین به کانال admin-support گوش میده
+      channelRef.current = pusherRef.current.subscribe('admin-support');
+      channelRef.current.bind('new-message', (data) => {
+        // فقط پیام‌های کاربران رو حساب کن
+        if (data.sender === 'user') {
+          setUnreadCount(prev => prev + 1);
+        }
+      });
+    } else {
+      // کاربر عادی: اول باید conversationId رو بگیره
+      try {
+        const response = await fetch(`${API_URL}/conversation`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (response.ok) {
+          const data = await response.json();
+          const channelName = data.pusherChannel;
+          
+          channelRef.current = pusherRef.current.subscribe(channelName);
+          channelRef.current.bind('new-message', (msgData) => {
+            // فقط پیام‌های ادمین رو حساب کن و فقط وقتی در صفحه چت نیستیم
+            if (msgData.sender === 'admin') {
+              setUnreadCount(prev => prev + 1);
+            }
+          });
+        }
+      } catch (error) {
+        console.error('Error connecting to pusher:', error);
+      }
+    }
+  };
+
+  // قطع اتصال Pusher
+  const disconnectPusher = () => {
+    if (channelRef.current) {
+      channelRef.current.unbind_all();
+      channelRef.current = null;
+    }
+    if (pusherRef.current) {
+      pusherRef.current.disconnect();
+      pusherRef.current = null;
+    }
+  };
+
+  // وقتی کاربر لاگین/لاگاوت میکنه
+  useEffect(() => {
+    if (isLoggedIn) {
+      fetchUnreadCount();
+      connectPusher();
+    } else {
+      setUnreadCount(0);
+      disconnectPusher();
+    }
+    
+    return () => {
+      disconnectPusher();
+    };
+  }, [isLoggedIn]);
+
+  // وقتی کاربر وارد صفحه پشتیبانی میشه، unread رو صفر کن
+  useEffect(() => {
+    if (activeTab === 'support' || activeTab === 'adminChat') {
+      setUnreadCount(0);
+    }
+  }, [activeTab]);
 
   // تابع برای تغییر تب با چک کردن لاگین
   const handleTabChange = (tab) => {
@@ -136,8 +274,35 @@ if (activeTab === 'projects') {
 
     // صفحه پشتیبانی
     if (activeTab === 'support') {
+      if (isAdmin) {
+        // اگر ادمین هست، لیست گفتگوها رو نشون بده
+        return (
+          <AdminConversations 
+            onBack={() => setActiveTab('home')} 
+            onSelectConversation={(convId) => {
+              setSelectedConversationId(convId);
+              setActiveTab('adminChat');
+            }}
+          />
+        );
+      }
+      
+      // اگر کاربر عادی هست، چت پشتیبانی معمولی
       return (
         <SupportChat onBack={() => setActiveTab('home')} />
+      );
+    }
+    
+    // صفحه چت ادمین با یک کاربر خاص
+    if (activeTab === 'adminChat') {
+      return (
+        <AdminChatView 
+          conversationId={selectedConversationId}
+          onBack={() => {
+            setSelectedConversationId(null);
+            setActiveTab('support');
+          }} 
+        />
       );
     }
     // صفحه آلفا
@@ -284,13 +449,13 @@ if (activeTab === 'projects') {
         <div className="bg-overlay"></div>
         
         {/* لایه شیشه‌ای روی بک‌گراند - فقط در صفحه پشتیبانی */}
-        {activeTab === 'support' && <div className="bg-glass-overlay"></div>}
+        {(activeTab === 'support' || activeTab === 'adminChat') && <div className="bg-glass-overlay"></div>}
 
         {/* Content */}
         {renderContent()}
 
         {/* Bottom Navigation - مخفی در صفحه پشتیبانی */}
-        {activeTab !== 'support' && activeTab !== 'alphaChannel' && (
+        {activeTab !== 'support' && activeTab !== 'alphaChannel' && activeTab !== 'adminChat' && (
           <div className="bottom-nav-glass">
             <div className="nav-items">
               <button 
@@ -304,7 +469,12 @@ if (activeTab === 'projects') {
                 className={`nav-item-ios ${activeTab === 'support' ? 'active' : ''}`}
                 onClick={() => handleTabChange('support')}
               >
-                <Headphones size={22} strokeWidth={activeTab === 'support' ? 2.5 : 1.5} />
+                <div className="nav-icon-wrapper">
+                  <Headphones size={22} strokeWidth={activeTab === 'support' ? 2.5 : 1.5} />
+                  {unreadCount > 0 && (
+                    <span className="nav-badge">{unreadCount > 99 ? '99+' : unreadCount}</span>
+                  )}
+                </div>
                 <span>Support</span>
               </button>
               <button 
