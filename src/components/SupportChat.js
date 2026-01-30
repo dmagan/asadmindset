@@ -14,6 +14,15 @@ const SupportChat = ({ onBack, onMessagesRead }) => {
   const [sending, setSending] = useState(false);
   const [conversationId, setConversationId] = useState(null);
   
+  // Check if current user is admin
+  const currentUser = authService.getUser();
+  const isAdmin = currentUser?.nicename === 'admin';
+    
+  // Typing indicator state - shows when OTHER party is typing
+  const [isOtherTyping, setIsOtherTyping] = useState(false);
+  const typingTimeoutRef = useRef(null);
+  const lastTypingSentRef = useRef(0);
+  
   // Menu states
   const [selectedMessage, setSelectedMessage] = useState(null);
   const [showMenu, setShowMenu] = useState(false);
@@ -245,6 +254,29 @@ useEffect(() => {
       }
     });
     
+    // Typing indicator - listen for OTHER party typing
+    channelRef.current.bind('typing', (data) => {
+      console.log('🔵 Typing event received:', data, 'isAdmin:', isAdmin);
+      
+      // If I'm admin, show when user types. If I'm user, show when admin types.
+      const shouldShow = isAdmin ? data.sender === 'user' : data.sender === 'admin';
+      console.log('🔵 shouldShow:', shouldShow);
+      
+      if (shouldShow) {
+        setIsOtherTyping(data.isTyping);
+        
+        // Auto-hide after 3 seconds if no update
+        if (data.isTyping) {
+          if (typingTimeoutRef.current) {
+            clearTimeout(typingTimeoutRef.current);
+          }
+          typingTimeoutRef.current = setTimeout(() => {
+            setIsOtherTyping(false);
+          }, 3000);
+        }
+      }
+    });
+    
     // Message edited
     channelRef.current.bind('message-edited', (data) => {
       setMessages(prev => prev.map(msg => 
@@ -432,9 +464,58 @@ useEffect(() => {
     setReplyingTo(null);
   };
 
+  // Send typing indicator to server
+  const sendTypingIndicator = async (isTyping) => {
+    // Throttle: don't send more than once per second
+    const now = Date.now();
+    if (isTyping && now - lastTypingSentRef.current < 1000) return;
+    lastTypingSentRef.current = now;
+    
+    console.log('🟡 Sending typing indicator:', { isTyping, conversationId, isAdmin });
+    
+    try {
+      const token = authService.getToken();
+      
+      // PHP will detect if user is admin and handle accordingly
+      const response = await fetch(`${API_URL}/conversation/typing`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ 
+          isTyping,
+          conversationId: conversationId // Send conversationId for admin
+        })
+      });
+      
+      const data = await response.json();
+      console.log('🟡 Typing API response:', response.ok, data);
+    } catch (error) {
+      console.error('🟡 Typing API error:', error);
+    }
+  };
+
+  // Handle input change with typing indicator
+  const handleInputChange = (e) => {
+    const value = e.target.value;
+    console.log('🟢 handleInputChange called:', value);
+    setNewMessage(value);
+    
+    // Send typing indicator
+    if (value.trim()) {
+      sendTypingIndicator(true);
+    } else {
+      sendTypingIndicator(false);
+    }
+  };
+
   const handleSend = async () => {
     const messageText = newMessage.trim();
     if (!messageText) return;
+
+    // Stop typing indicator
+    sendTypingIndicator(false);
 
     const tempId = Date.now();
     const time = formatMessageTime(new Date().toISOString());
@@ -1223,6 +1304,17 @@ useEffect(() => {
         </div>
       )}
 
+      {/* Typing Indicator */}
+      {isOtherTyping && (
+        <div className="typing-indicator-container">
+          <div className="typing-indicator">
+            <span className="typing-dot"></span>
+            <span className="typing-dot"></span>
+            <span className="typing-dot"></span>
+          </div>
+        </div>
+      )}
+
       {/* Scroll to Bottom Button */}
       {showScrollButton && (
         <button className="scroll-to-bottom-btn" onClick={scrollToBottom}>
@@ -1305,8 +1397,9 @@ useEffect(() => {
               ref={inputRef}
               placeholder="پیام خود را بنویسید..."
               value={newMessage}
-              onChange={(e) => setNewMessage(e.target.value)}
+              onChange={handleInputChange}
               onKeyDown={handleKeyDown}
+              onBlur={() => sendTypingIndicator(false)}
               className="chat-input-glass"
               rows={1}
               disabled={uploadingVideo}
