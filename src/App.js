@@ -171,6 +171,7 @@ const CutifyGlassDemo = () => {
   }, [isLoggedIn]);
 
   // وقتی کاربر وارد صفحه پشتیبانی میشه، unread رو صفر کن
+  // (mark as read سمت سرور توسط SupportChat انجام میشه)
   useEffect(() => {
     if (activeTab === 'support' || activeTab === 'adminChat') {
       setUnreadCount(0);
@@ -289,7 +290,10 @@ if (activeTab === 'projects') {
       
       // اگر کاربر عادی هست، چت پشتیبانی معمولی
       return (
-        <SupportChat onBack={() => setActiveTab('home')} />
+        <SupportChat 
+          onBack={() => setActiveTab('home')} 
+          onMessagesRead={() => setUnreadCount(0)}
+        />
       );
     }
     

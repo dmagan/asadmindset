@@ -116,12 +116,7 @@ const AlphaChannel = ({ onBack }) => {
       if (pageNum === 1) setLoading(true);
       else setLoadingMore(true);
       
-      const token = authService.getToken();
-      const response = await fetch(`${API_URL}/channel/posts?page=${pageNum}&per_page=20`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
+      const response = await authService.authenticatedFetch(`${API_URL}/channel/posts?page=${pageNum}&per_page=20`);
       
       if (!response.ok) throw new Error('Failed to load posts');
       
@@ -138,6 +133,7 @@ const AlphaChannel = ({ onBack }) => {
       
     } catch (error) {
       console.error('Error loading posts:', error);
+      // If it's an auth error, the authService will handle logout
     } finally {
       setLoading(false);
       setLoadingMore(false);
@@ -147,12 +143,7 @@ const AlphaChannel = ({ onBack }) => {
   // Load notifications
   const loadNotifications = useCallback(async () => {
     try {
-      const token = authService.getToken();
-      const response = await fetch(`${API_URL}/notifications?per_page=10`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
+      const response = await authService.authenticatedFetch(`${API_URL}/notifications?per_page=10`);
       
       if (!response.ok) return;
       
@@ -167,12 +158,7 @@ const AlphaChannel = ({ onBack }) => {
   // Load unread count
   const loadUnreadCount = useCallback(async () => {
     try {
-      const token = authService.getToken();
-      const response = await fetch(`${API_URL}/notifications/unread-count`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
+      const response = await authService.authenticatedFetch(`${API_URL}/notifications/unread-count`);
       
       if (!response.ok) return;
       

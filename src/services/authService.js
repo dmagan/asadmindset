@@ -1,7 +1,50 @@
 const API_URL = 'https://asadmindset.com/wp-json';
 const GOOGLE_CLIENT_ID = '667060896472-7l179s9cfmjmiuv6au75i9p52hhnhl9p.apps.googleusercontent.com';
 
+// Token refresh interval (every 5 minutes)
+const TOKEN_CHECK_INTERVAL = 5 * 60 * 1000;
+
+// Auth state change listeners
+let authListeners = [];
+let tokenCheckTimer = null;
+
 export const authService = {
+  // Add listener for auth state changes
+  addAuthListener(callback) {
+    authListeners.push(callback);
+    return () => {
+      authListeners = authListeners.filter(cb => cb !== callback);
+    };
+  },
+
+  // Notify all listeners of auth state change
+  notifyAuthChange(isAuthenticated) {
+    authListeners.forEach(cb => cb(isAuthenticated));
+  },
+
+  // Start periodic token validation
+  startTokenCheck() {
+    if (tokenCheckTimer) return;
+    
+    tokenCheckTimer = setInterval(async () => {
+      if (this.isLoggedIn()) {
+        const isValid = await this.validateToken();
+        if (!isValid) {
+          console.log('Token expired, logging out...');
+          this.logout(false); // Don't reload, just clear data
+          this.notifyAuthChange(false);
+        }
+      }
+    }, TOKEN_CHECK_INTERVAL);
+  },
+
+  // Stop periodic token validation
+  stopTokenCheck() {
+    if (tokenCheckTimer) {
+      clearInterval(tokenCheckTimer);
+      tokenCheckTimer = null;
+    }
+  },
   // Google Client ID
   getGoogleClientId() {
     return GOOGLE_CLIENT_ID;
@@ -38,6 +81,9 @@ export const authService = {
       name: userName,
       nicename: userNicename,
     }));
+
+    // Start token validation timer
+    this.startTokenCheck();
 
     return data;
   },
@@ -76,14 +122,20 @@ export const authService = {
       nicename: userNicename,
     }));
 
+    // Start token validation timer
+    this.startTokenCheck();
+
     return data;
   },
 
   // Logout
-  logout() {
+  logout(shouldReload = true) {
+    this.stopTokenCheck();
     localStorage.removeItem('token');
     localStorage.removeItem('user');
-    window.location.reload();
+    if (shouldReload) {
+      window.location.reload();
+    }
   },
 
   // Get token
@@ -118,6 +170,17 @@ export const authService = {
     } catch {
       return false;
     }
+  },
+
+  // Check token and handle expiry - use this before API calls
+  async ensureValidToken() {
+    const isValid = await this.validateToken();
+    if (!isValid) {
+      this.logout(false);
+      this.notifyAuthChange(false);
+      return false;
+    }
+    return true;
   },
 
   // Update profile (name)
@@ -308,5 +371,42 @@ export const authService = {
     }
 
     return data;
+  },
+
+  // Handle API response and check for auth errors
+  handleApiResponse(response) {
+    if (response.status === 401 || response.status === 403) {
+      // Token is invalid or expired
+      this.logout(false);
+      this.notifyAuthChange(false);
+      throw new Error('Session expired. Please login again.');
+    }
+    return response;
+  },
+
+  // Make authenticated fetch request with auto-logout on 401
+  async authenticatedFetch(url, options = {}) {
+    const token = this.getToken();
+    
+    if (!token) {
+      this.notifyAuthChange(false);
+      throw new Error('Not authenticated');
+    }
+
+    const headers = {
+      ...options.headers,
+      'Authorization': `Bearer ${token}`,
+    };
+
+    const response = await fetch(url, { ...options, headers });
+    
+    // If token expired, handle it
+    if (response.status === 401 || response.status === 403) {
+      this.logout(false);
+      this.notifyAuthChange(false);
+      throw new Error('Session expired. Please login again.');
+    }
+
+    return response;
   },
 };

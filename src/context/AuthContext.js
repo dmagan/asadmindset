@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { authService } from '../services/authService';
 
 const AuthContext = createContext(null);
@@ -7,20 +7,38 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  // Handle auth state changes (from token expiry)
+  const handleAuthChange = useCallback((isAuthenticated) => {
+    if (!isAuthenticated) {
+      setUser(null);
+    }
+  }, []);
+
   useEffect(() => {
     const checkAuth = async () => {
       if (authService.isLoggedIn()) {
         const isValid = await authService.validateToken();
         if (isValid) {
           setUser(authService.getUser());
+          // Start token check timer if user is logged in
+          authService.startTokenCheck();
         } else {
-          authService.logout();
+          authService.logout(false);
         }
       }
       setLoading(false);
     };
+    
     checkAuth();
-  }, []);
+    
+    // Listen for auth state changes (e.g., token expiry)
+    const unsubscribe = authService.addAuthListener(handleAuthChange);
+    
+    return () => {
+      unsubscribe();
+      authService.stopTokenCheck();
+    };
+  }, [handleAuthChange]);
 
   const login = async (username, password) => {
   const data = await authService.login(username, password);
@@ -42,9 +60,9 @@ export const AuthProvider = ({ children }) => {
   };
 
   const logout = () => {
-  authService.logout();
-  setUser(null);
-};
+    authService.logout(true);
+    setUser(null);
+  };
 
   const updateProfile = async (name) => {
     const data = await authService.updateProfile(name);

@@ -7,7 +7,7 @@ const API_URL = 'https://asadmindset.com/wp-json/asadmindset/v1';
 const PUSHER_KEY = '71815fd9e2b90f89a57b';
 const PUSHER_CLUSTER = 'eu';
 
-const SupportChat = ({ onBack }) => {
+const SupportChat = ({ onBack, onMessagesRead }) => {
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(true);
@@ -115,11 +115,14 @@ useEffect(() => {
     };
   }, []);
 
-  // Mark admin messages as read when chat is open
+  // Mark admin messages as read when chat is open (only once when loaded)
+  const hasMarkedAsRead = useRef(false);
+  
   useEffect(() => {
-    if (conversationId && messages.length > 0) {
+    if (conversationId && messages.length > 0 && !hasMarkedAsRead.current) {
       const unreadAdminMessages = messages.filter(m => m.sender === 'support' && m.status !== 'read');
       if (unreadAdminMessages.length > 0) {
+        hasMarkedAsRead.current = true;
         markMessagesAsRead();
       }
     }
@@ -127,13 +130,21 @@ useEffect(() => {
 
   const markMessagesAsRead = async () => {
     try {
-      const token = authService.getToken();
-      await fetch(`${API_URL}/conversation/read`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
+      await authService.authenticatedFetch(`${API_URL}/conversation/read`, {
+        method: 'POST'
       });
+      
+      // Update local state to mark admin messages as read
+      setMessages(prev => prev.map(msg => 
+        msg.sender === 'support' && msg.status !== 'read' 
+          ? { ...msg, status: 'read' } 
+          : msg
+      ));
+      
+      // Notify parent that messages are read
+      if (onMessagesRead) {
+        onMessagesRead();
+      }
     } catch (error) {
       console.error('Error marking messages as read:', error);
     }
@@ -141,12 +152,7 @@ useEffect(() => {
 
   const loadConversation = async () => {
     try {
-      const token = authService.getToken();
-      const response = await fetch(`${API_URL}/conversation`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
+      const response = await authService.authenticatedFetch(`${API_URL}/conversation`);
       
       if (!response.ok) throw new Error('Failed to load conversation');
       
@@ -427,12 +433,16 @@ useEffect(() => {
   };
 
   const handleSend = async () => {
-    if (!newMessage.trim() || sending) return;
+    const messageText = newMessage.trim();
+    if (!messageText) return;
 
     const tempId = Date.now();
     const time = formatMessageTime(new Date().toISOString());
-    const messageText = newMessage;
     const replyTo = replyingTo;
+    
+    // Clear input immediately so user can type next message
+    setNewMessage('');
+    setReplyingTo(null);
     
     // Optimistic update with 'sending' status
     const localMessage = {
@@ -445,9 +455,6 @@ useEffect(() => {
     };
     
     setMessages(prev => [...prev, localMessage]);
-    setNewMessage('');
-    setReplyingTo(null);
-    setSending(true);
 
     try {
       const token = authService.getToken();
@@ -475,10 +482,9 @@ useEffect(() => {
       
     } catch (error) {
       console.error('Error sending message:', error);
-      setMessages(prev => prev.filter(m => m.id !== tempId));
-      alert('خطا در ارسال پیام');
-    } finally {
-      setSending(false);
+      setMessages(prev => prev.map(m => 
+        m.id === tempId ? { ...m, status: 'failed' } : m
+      ));
     }
   };
 
@@ -878,9 +884,7 @@ useEffect(() => {
     
     if (newMessage.trim()) {
       handleSend();
-      requestAnimationFrame(() => {
-        inputRef.current?.focus();
-      });
+      // Don't blur - iOS will keep keyboard open if we don't touch anything else
     } else if (isRecording) {
       stopRecording();
     } else {
@@ -954,6 +958,12 @@ useEffect(() => {
         className="chat-messages-area"
         ref={messagesAreaRef}
         onScroll={handleScroll}
+        onTouchStart={() => {
+          // Close keyboard when touching messages area
+          if (document.activeElement === inputRef.current) {
+            inputRef.current?.blur();
+          }
+        }}
       >
         {messages.map((msg) => (
           <div
@@ -1299,15 +1309,21 @@ useEffect(() => {
               onKeyDown={handleKeyDown}
               className="chat-input-glass"
               rows={1}
-              disabled={sending || uploadingVideo}
+              disabled={uploadingVideo}
             />
           )}
           
           <button 
             className={`chat-send-btn-glass ${isRecording ? 'recording' : ''}`}
-            onTouchEnd={handleMicOrSend}
-            onMouseDown={handleMicOrSend}
-            disabled={sending || uploadingVideo}
+            onTouchEnd={(e) => {
+              e.preventDefault();
+              handleMicOrSend(e);
+            }}
+            onClick={(e) => {
+              e.preventDefault();
+              handleMicOrSend(e);
+            }}
+            disabled={uploadingVideo}
           >
             {newMessage.trim() ? (
               <Send size={20} />
