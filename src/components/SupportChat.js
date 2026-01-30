@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Send, ArrowLeft, Headphones, Trash2, Edit3, X, Paperclip, Mic, Square, Play, Pause, Check, CheckCheck, Reply, CornerDownLeft, ArrowDown, Video, Image, Loader2, ChevronLeft } from 'lucide-react';
 import Pusher from 'pusher-js';
 import { authService } from '../services/authService';
+import ImageZoomModal from './ImageZoomModal';
 
 const API_URL = 'https://asadmindset.com/wp-json/asadmindset/v1';
 const PUSHER_KEY = '71815fd9e2b90f89a57b';
@@ -1295,17 +1296,10 @@ useEffect(() => {
 
       {/* Image Zoom Modal */}
       {zoomedImage && (
-        <div className="image-zoom-overlay" onClick={() => setZoomedImage(null)}>
-          <button className="zoom-close-btn" onClick={() => setZoomedImage(null)}>
-            <X size={24} />
-          </button>
-          <img 
-            src={zoomedImage} 
-            alt="zoomed" 
-            className="zoomed-image"
-            onClick={(e) => e.stopPropagation()}
-          />
-        </div>
+        <ImageZoomModal 
+          src={zoomedImage} 
+          onClose={() => setZoomedImage(null)} 
+        />
       )}
 
       {/* Video Modal */}

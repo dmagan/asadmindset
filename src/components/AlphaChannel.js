@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import Pusher from 'pusher-js';
 import { authService } from '../services/authService';
+import ImageZoomModal from './ImageZoomModal';
 
 const API_URL = 'https://asadmindset.com/wp-json/asadmindset/v1';
 const PUSHER_KEY = '71815fd9e2b90f89a57b';
@@ -1308,29 +1309,10 @@ const AlphaChannel = ({ onBack }) => {
 
       {/* Image Zoom Modal with Pinch-to-Zoom */}
       {zoomedImage && (
-        <div className="image-zoom-overlay" onClick={() => setZoomedImage(null)}>
-          <button className="zoom-close-btn" onClick={() => setZoomedImage(null)}>
-            <X size={24} />
-          </button>
-          <div 
-            className="pinch-zoom-container"
-            onClick={(e) => e.stopPropagation()}
-            onDoubleClick={(e) => {
-              const img = e.currentTarget.querySelector('img');
-              if (img.style.transform === 'scale(2)') {
-                img.style.transform = 'scale(1)';
-              } else {
-                img.style.transform = 'scale(2)';
-              }
-            }}
-          >
-            <img 
-              src={zoomedImage} 
-              alt="" 
-              className="zoomed-image pinch-zoom-image"
-            />
-          </div>
-        </div>
+        <ImageZoomModal 
+          src={zoomedImage} 
+          onClose={() => setZoomedImage(null)} 
+        />
       )}
 
       {/* Video Modal */}

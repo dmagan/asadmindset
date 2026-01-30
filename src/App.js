@@ -41,6 +41,38 @@ const CutifyGlassDemo = () => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(102);
   const [showUploadModal, setShowUploadModal] = useState(false);
+  const [isLandscape, setIsLandscape] = useState(false);
+  const [isImageZoomOpen, setIsImageZoomOpen] = useState(false);
+
+  // گوش دادن به event از ImageZoomModal
+  useEffect(() => {
+    const handleZoomOpen = () => setIsImageZoomOpen(true);
+    const handleZoomClose = () => setIsImageZoomOpen(false);
+    
+    window.addEventListener('imageZoomOpen', handleZoomOpen);
+    window.addEventListener('imageZoomClose', handleZoomClose);
+    
+    return () => {
+      window.removeEventListener('imageZoomOpen', handleZoomOpen);
+      window.removeEventListener('imageZoomClose', handleZoomClose);
+    };
+  }, []);
+
+  // تشخیص چرخش گوشی
+  useEffect(() => {
+    const checkOrientation = () => {
+      setIsLandscape(window.innerWidth > window.innerHeight);
+    };
+    
+    checkOrientation();
+    window.addEventListener('resize', checkOrientation);
+    window.addEventListener('orientationchange', checkOrientation);
+    
+    return () => {
+      window.removeEventListener('resize', checkOrientation);
+      window.removeEventListener('orientationchange', checkOrientation);
+    };
+  }, []);
   
   // State برای ذخیره صفحه‌ای که کاربر می‌خواست بره و نیاز به لاگین داشت
   const [pendingTab, setPendingTab] = useState(null);
@@ -515,6 +547,52 @@ if (activeTab === 'projects') {
       </div>
 
       <IOSAddToHome />
+
+      {/* Landscape Warning Overlay */}
+      {isLandscape && !isImageZoomOpen && (
+        <div className="landscape-warning-overlay">
+          <div className="landscape-warning-content">
+            <div className="rotate-phone-icon">
+              📱
+            </div>
+            <p>لطفاً گوشی را عمودی نگه دارید</p>
+          </div>
+          <style>{`
+            .landscape-warning-overlay {
+              position: fixed;
+              inset: 0;
+              background: rgba(0, 0, 0, 0.95);
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              z-index: 99999;
+            }
+            
+            .landscape-warning-content {
+              text-align: center;
+              color: white;
+              font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif;
+            }
+            
+            .rotate-phone-icon {
+              font-size: 64px;
+              margin-bottom: 20px;
+              animation: rotateHint 2s ease-in-out infinite;
+            }
+            
+            @keyframes rotateHint {
+              0%, 100% { transform: rotate(0deg); }
+              25% { transform: rotate(-30deg); }
+              75% { transform: rotate(30deg); }
+            }
+            
+            .landscape-warning-content p {
+              font-size: 18px;
+              color: rgba(255, 255, 255, 0.9);
+            }
+          `}</style>
+        </div>
+      )}
     </div>
   );
 };
