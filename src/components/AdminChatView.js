@@ -16,6 +16,7 @@ const AdminChatView = ({ conversationId, onBack }) => {
   
   // Typing indicator state - shows when user is typing
   const [isUserTyping, setIsUserTyping] = useState(false);
+  const [isUserRecording, setIsUserRecording] = useState(false);
   const typingTimeoutRef = useRef(null);
   const lastTypingSentRef = useRef(0);
   
@@ -55,6 +56,7 @@ useEffect(() => {
   const [playingAudioId, setPlayingAudioId] = useState(null);
   const [audioCurrentTime, setAudioCurrentTime] = useState(0);
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
+  const recordingIndicatorRef = useRef(null);
   
   // Highlighted message for scroll to reply
   const [highlightedMessageId, setHighlightedMessageId] = useState(null);
@@ -254,18 +256,20 @@ useEffect(() => {
       setMessages(prev => prev.filter(msg => msg.id !== data.id));
     });
     
-    // User typing indicator
+    // User typing/recording indicator
     channelRef.current.bind('typing', (data) => {
       if (data.sender === 'user') {
         setIsUserTyping(data.isTyping);
+        setIsUserRecording(data.isRecording || false);
         
         // Auto-hide after 3 seconds if no update
-        if (data.isTyping) {
+        if (data.isTyping || data.isRecording) {
           if (typingTimeoutRef.current) {
             clearTimeout(typingTimeoutRef.current);
           }
           typingTimeoutRef.current = setTimeout(() => {
             setIsUserTyping(false);
+            setIsUserRecording(false);
           }, 3000);
         }
       }
@@ -290,11 +294,11 @@ useEffect(() => {
     } catch (e) {}
   };
 
-  // Send typing indicator to server (admin typing)
-  const sendTypingIndicator = async (isTyping) => {
+  // Send typing/recording indicator to server (admin typing)
+  const sendTypingIndicator = async (isTyping, isRecording = false) => {
     // Throttle: don't send more than once per second
     const now = Date.now();
-    if (isTyping && now - lastTypingSentRef.current < 1000) return;
+    if ((isTyping || isRecording) && now - lastTypingSentRef.current < 1000) return;
     lastTypingSentRef.current = now;
     
     try {
@@ -306,7 +310,7 @@ useEffect(() => {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({ isTyping })
+        body: JSON.stringify({ isTyping, isRecording })
       });
     } catch (error) {
       // Silently fail - typing indicator is not critical
@@ -320,9 +324,9 @@ useEffect(() => {
     
     // Send typing indicator
     if (value.trim()) {
-      sendTypingIndicator(true);
+      sendTypingIndicator(true, false);
     } else {
-      sendTypingIndicator(false);
+      sendTypingIndicator(false, false);
     }
   };
 
@@ -869,6 +873,14 @@ useEffect(() => {
       mediaRecorderRef.current.start();
       setIsRecording(true);
       
+      // Send recording indicator immediately
+      sendTypingIndicator(false, true);
+      
+      // Keep sending recording indicator every 2 seconds
+      recordingIndicatorRef.current = setInterval(() => {
+        sendTypingIndicator(false, true);
+      }, 2000);
+      
       recordingTimerRef.current = setInterval(() => {
         setRecordingTime(prev => prev + 1);
       }, 1000);
@@ -884,6 +896,15 @@ useEffect(() => {
       mediaRecorderRef.current.stop();
       setIsRecording(false);
       clearInterval(recordingTimerRef.current);
+      
+      // Stop recording indicator interval
+      if (recordingIndicatorRef.current) {
+        clearInterval(recordingIndicatorRef.current);
+        recordingIndicatorRef.current = null;
+      }
+      
+      // Send stop recording indicator
+      sendTypingIndicator(false, false);
     }
   };
 
@@ -1272,14 +1293,26 @@ useEffect(() => {
         </div>
       )}
 
-      {/* Typing Indicator */}
-      {isUserTyping && (
+      {/* Typing/Recording Indicator */}
+      {(isUserTyping || isUserRecording) && (
         <div className="typing-indicator-container">
-          <div className="typing-indicator">
-            <span className="typing-dot"></span>
-            <span className="typing-dot"></span>
-            <span className="typing-dot"></span>
-          </div>
+          {isUserRecording ? (
+            <div className="recording-indicator-bubble">
+              <Mic size={16} className="recording-mic-icon" />
+              <div className="recording-waves">
+                <span className="wave-bar"></span>
+                <span className="wave-bar"></span>
+                <span className="wave-bar"></span>
+                <span className="wave-bar"></span>
+              </div>
+            </div>
+          ) : (
+            <div className="typing-indicator">
+              <span className="typing-dot"></span>
+              <span className="typing-dot"></span>
+              <span className="typing-dot"></span>
+            </div>
+          )}
         </div>
       )}
 

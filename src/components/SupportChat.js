@@ -17,9 +17,11 @@ const SupportChat = ({ onBack, onMessagesRead }) => {
   // Check if current user is admin
   const currentUser = authService.getUser();
   const isAdmin = currentUser?.nicename === 'admin';
-    
+  
+  
   // Typing indicator state - shows when OTHER party is typing
   const [isOtherTyping, setIsOtherTyping] = useState(false);
+  const [isOtherRecording, setIsOtherRecording] = useState(false);
   const typingTimeoutRef = useRef(null);
   const lastTypingSentRef = useRef(0);
   
@@ -59,6 +61,7 @@ useEffect(() => {
   const [playingAudioId, setPlayingAudioId] = useState(null);
   const [audioCurrentTime, setAudioCurrentTime] = useState(0);
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
+  const recordingIndicatorRef = useRef(null);
   
   // Highlighted message for scroll to reply
   const [highlightedMessageId, setHighlightedMessageId] = useState(null);
@@ -254,24 +257,27 @@ useEffect(() => {
       }
     });
     
-    // Typing indicator - listen for OTHER party typing
+    // Typing indicator - listen for OTHER party typing or recording
     channelRef.current.bind('typing', (data) => {
-      console.log('🔵 Typing event received:', data, 'isAdmin:', isAdmin);
+      console.log('📥 Received indicator:', data);
       
       // If I'm admin, show when user types. If I'm user, show when admin types.
       const shouldShow = isAdmin ? data.sender === 'user' : data.sender === 'admin';
-      console.log('🔵 shouldShow:', shouldShow);
       
       if (shouldShow) {
         setIsOtherTyping(data.isTyping);
+        setIsOtherRecording(data.isRecording || false);
+        
+        console.log('👁 Showing:', { typing: data.isTyping, recording: data.isRecording });
         
         // Auto-hide after 3 seconds if no update
-        if (data.isTyping) {
+        if (data.isTyping || data.isRecording) {
           if (typingTimeoutRef.current) {
             clearTimeout(typingTimeoutRef.current);
           }
           typingTimeoutRef.current = setTimeout(() => {
             setIsOtherTyping(false);
+            setIsOtherRecording(false);
           }, 3000);
         }
       }
@@ -464,20 +470,20 @@ useEffect(() => {
     setReplyingTo(null);
   };
 
-  // Send typing indicator to server
-  const sendTypingIndicator = async (isTyping) => {
+  // Send typing/recording indicator to server
+  const sendTypingIndicator = async (isTyping, isRecording = false) => {
     // Throttle: don't send more than once per second
     const now = Date.now();
-    if (isTyping && now - lastTypingSentRef.current < 1000) return;
+    if ((isTyping || isRecording) && now - lastTypingSentRef.current < 1000) return;
     lastTypingSentRef.current = now;
     
-    console.log('🟡 Sending typing indicator:', { isTyping, conversationId, isAdmin });
+    console.log('📤 Sending indicator:', { isTyping, isRecording });
     
     try {
       const token = authService.getToken();
       
       // PHP will detect if user is admin and handle accordingly
-      const response = await fetch(`${API_URL}/conversation/typing`, {
+      await fetch(`${API_URL}/conversation/typing`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -485,28 +491,25 @@ useEffect(() => {
         },
         body: JSON.stringify({ 
           isTyping,
+          isRecording,
           conversationId: conversationId // Send conversationId for admin
         })
       });
-      
-      const data = await response.json();
-      console.log('🟡 Typing API response:', response.ok, data);
     } catch (error) {
-      console.error('🟡 Typing API error:', error);
+      console.error('❌ Indicator error:', error);
     }
   };
 
   // Handle input change with typing indicator
   const handleInputChange = (e) => {
     const value = e.target.value;
-    console.log('🟢 handleInputChange called:', value);
     setNewMessage(value);
     
     // Send typing indicator
     if (value.trim()) {
-      sendTypingIndicator(true);
+      sendTypingIndicator(true, false);
     } else {
-      sendTypingIndicator(false);
+      sendTypingIndicator(false, false);
     }
   };
 
@@ -897,6 +900,14 @@ useEffect(() => {
       mediaRecorderRef.current.start();
       setIsRecording(true);
       
+      // Send recording indicator immediately
+      sendTypingIndicator(false, true);
+      
+      // Keep sending recording indicator every 2 seconds
+      recordingIndicatorRef.current = setInterval(() => {
+        sendTypingIndicator(false, true);
+      }, 2000);
+      
       recordingTimerRef.current = setInterval(() => {
         setRecordingTime(prev => prev + 1);
       }, 1000);
@@ -912,6 +923,15 @@ useEffect(() => {
       mediaRecorderRef.current.stop();
       setIsRecording(false);
       clearInterval(recordingTimerRef.current);
+      
+      // Stop recording indicator interval
+      if (recordingIndicatorRef.current) {
+        clearInterval(recordingIndicatorRef.current);
+        recordingIndicatorRef.current = null;
+      }
+      
+      // Send stop recording indicator
+      sendTypingIndicator(false, false);
     }
   };
 
@@ -1304,14 +1324,26 @@ useEffect(() => {
         </div>
       )}
 
-      {/* Typing Indicator */}
-      {isOtherTyping && (
+      {/* Typing/Recording Indicator */}
+      {(isOtherTyping || isOtherRecording) && (
         <div className="typing-indicator-container">
-          <div className="typing-indicator">
-            <span className="typing-dot"></span>
-            <span className="typing-dot"></span>
-            <span className="typing-dot"></span>
-          </div>
+          {isOtherRecording ? (
+            <div className="recording-indicator-bubble">
+              <Mic size={16} className="recording-mic-icon" />
+              <div className="recording-waves">
+                <span className="wave-bar"></span>
+                <span className="wave-bar"></span>
+                <span className="wave-bar"></span>
+                <span className="wave-bar"></span>
+              </div>
+            </div>
+          ) : (
+            <div className="typing-indicator">
+              <span className="typing-dot"></span>
+              <span className="typing-dot"></span>
+              <span className="typing-dot"></span>
+            </div>
+          )}
         </div>
       )}
 
