@@ -58,10 +58,16 @@ const CutifyGlassDemo = () => {
     };
   }, []);
 
-  // تشخیص چرخش گوشی
+  // تشخیص چرخش گوشی (فقط موبایل)
   useEffect(() => {
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    
     const checkOrientation = () => {
-      setIsLandscape(window.innerWidth > window.innerHeight);
+      if (isMobile) {
+        setIsLandscape(window.innerWidth > window.innerHeight);
+      } else {
+        setIsLandscape(false);
+      }
     };
     
     checkOrientation();
@@ -515,10 +521,10 @@ if (activeTab === 'projects') {
               </button>
               <button 
                 className="nav-item-ios add-button-ios"
-                onClick={() => setShowUploadModal(true)}
+                onClick={() => {}}
               >
-                <div className="add-icon-ios">
-                  <Plus size={30} strokeWidth={2.5} />
+                <div className="add-icon-ios ai-text">
+                  Ai
                 </div>
               </button>
               <button 

@@ -829,6 +829,14 @@ html, body {
   transform: scale(0.95);
 }
 
+.add-icon-ios.ai-text {
+  font-size: 22px;
+  font-weight: 700;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif;
+  letter-spacing: -0.5px;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
         .home-indicator {
           width: 134px;
           height: 5px;
