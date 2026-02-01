@@ -5,6 +5,7 @@ import IOSAddToHome from './IOSAddToHome';
 import VideoUploadCard from './VideoUploadCard.js';
 import './styles/cutify-glass.css';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { ToastProvider } from './components/Toast';
 import LoginCard from './components/LoginCard';
 import ProfileCard from './components/ProfileCard';
 import ProjectsPage from './components/ProjectsPage';
@@ -13,6 +14,7 @@ import AdminConversations from './components/AdminConversations';
 import AdminChatView from './components/AdminChatView';
 import AlphaPage from './components/AlphaPage';
 import AlphaChannel from './components/AlphaChannel';
+import SubscriptionPage from './components/SubscriptionPage';
 import { authService } from './services/authService';
 import Pusher from 'pusher-js';
 
@@ -297,7 +299,7 @@ const CutifyGlassDemo = () => {
       // اگه لاگین هست → صفحه پروفایل
       return (
         <div className="content profile-content">
-          <ProfileCard />
+          <ProfileCard onNavigateToSubscription={() => setActiveTab('subscription')} />
         </div>
       );
     }
@@ -355,6 +357,12 @@ if (activeTab === 'projects') {
     if (activeTab === 'alphaChannel') {
       return <AlphaChannel onBack={() => setActiveTab('alpha')} />;
     }
+    
+    // صفحه اشتراک
+    if (activeTab === 'subscription') {
+      return <SubscriptionPage onBack={() => setActiveTab('profile')} onNavigateToSupport={() => setActiveTab('support')} />;
+    }
+    
     // صفحه اصلی
     return (
       <div className="content">
@@ -605,7 +613,9 @@ if (activeTab === 'projects') {
 
 const App = () => (
   <AuthProvider>
-    <CutifyGlassDemo />
+    <ToastProvider>
+      <CutifyGlassDemo />
+    </ToastProvider>
   </AuthProvider>
 );
 

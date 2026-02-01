@@ -10,10 +10,11 @@ import {
   Check,
   Eye,
   EyeOff,
-  Globe
+  Globe,
+  Crown
 } from 'lucide-react';
 
-const ProfileCard = () => {
+const ProfileCard = ({ onNavigateToSubscription }) => {
   const { t, i18n } = useTranslation();
   const { user, logout, updateProfile, changePassword } = useAuth();
 
@@ -88,6 +89,16 @@ const ProfileCard = () => {
 
       {/* Menu Items */}
       <div className="profile-menu">
+        <button className="profile-menu-item subscription-item" onClick={onNavigateToSubscription}>
+          <div className="menu-item-left">
+            <div className="menu-icon subscription-icon">
+              <Crown size={20} />
+            </div>
+            <span className="menu-label">اشتراک</span>
+          </div>
+          <ChevronRight size={20} className="menu-arrow" />
+        </button>
+
         <button className="profile-menu-item" onClick={() => setCurrentView('editName')}>
           <div className="menu-item-left">
             <div className="menu-icon">
@@ -476,6 +487,21 @@ const ProfileCard = () => {
           align-items: center;
           justify-content: center;
           color: #60a5fa;
+        }
+
+        .menu-icon.subscription-icon {
+          background: linear-gradient(135deg, rgba(251, 191, 36, 0.2) 0%, rgba(245, 158, 11, 0.15) 100%);
+          color: #fbbf24;
+        }
+
+        .profile-menu-item.subscription-item {
+          background: linear-gradient(135deg, rgba(251, 191, 36, 0.08) 0%, rgba(245, 158, 11, 0.05) 100%);
+          border-color: rgba(251, 191, 36, 0.2);
+        }
+
+        .profile-menu-item.subscription-item:hover {
+          background: linear-gradient(135deg, rgba(251, 191, 36, 0.15) 0%, rgba(245, 158, 11, 0.1) 100%);
+          border-color: rgba(251, 191, 36, 0.3);
         }
 
         .menu-label {
