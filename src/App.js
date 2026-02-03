@@ -15,6 +15,8 @@ import AdminChatView from './components/AdminChatView';
 import AlphaPage from './components/AlphaPage';
 import AlphaChannel from './components/AlphaChannel';
 import SubscriptionPage from './components/SubscriptionPage';
+import MyPurchases from './components/MyPurchases';
+import AdminSubscriptionManager from './components/AdminSubscriptionManager';
 import { authService } from './services/authService';
 import Pusher from 'pusher-js';
 
@@ -27,7 +29,7 @@ import {
   Home, 
   Headphones, 
   Plus, 
-  LayoutGrid, 
+  ShoppingBag,
   User, 
   ChevronRight,
   Play,
@@ -91,6 +93,9 @@ const CutifyGlassDemo = () => {
   // State برای تعداد پیام‌های خوانده نشده
   const [unreadCount, setUnreadCount] = useState(0);
   
+  // State برای تعداد اشتراک‌های pending (برای ادمین)
+  const [pendingSubCount, setPendingSubCount] = useState(0);
+  
   // Ref برای Pusher
   const pusherRef = useRef(null);
   const channelRef = useRef(null);
@@ -139,6 +144,27 @@ const CutifyGlassDemo = () => {
     }
   };
 
+  // دریافت تعداد اشتراک‌های pending (برای ادمین)
+  const fetchPendingSubCount = async () => {
+    if (!isLoggedIn || !isAdmin) {
+      setPendingSubCount(0);
+      return;
+    }
+    
+    try {
+      const token = authService.getToken();
+      const response = await fetch(`${API_URL}/admin/subscriptions/stats`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setPendingSubCount(data.pending || 0);
+      }
+    } catch (error) {
+      console.error('Error fetching pending sub count:', error);
+    }
+  };
+
   // اتصال به Pusher برای دریافت پیام‌های جدید
   const connectPusher = async () => {
     if (!isLoggedIn || pusherRef.current) return;
@@ -158,6 +184,10 @@ const CutifyGlassDemo = () => {
         if (data.sender === 'user') {
           setUnreadCount(prev => prev + 1);
         }
+      });
+      // گوش دادن به درخواست‌های اشتراک جدید
+      channelRef.current.bind('new-subscription', (data) => {
+        setPendingSubCount(prev => prev + 1);
       });
     } else {
       // کاربر عادی: اول باید conversationId رو بگیره
@@ -199,9 +229,11 @@ const CutifyGlassDemo = () => {
   useEffect(() => {
     if (isLoggedIn) {
       fetchUnreadCount();
+      fetchPendingSubCount();
       connectPusher();
     } else {
       setUnreadCount(0);
+      setPendingSubCount(0);
       disconnectPusher();
     }
     
@@ -215,6 +247,10 @@ const CutifyGlassDemo = () => {
   useEffect(() => {
     if (activeTab === 'support' || activeTab === 'adminChat') {
       setUnreadCount(0);
+    }
+    // وقتی ادمین وارد صفحه اشتراک‌ها میشه، بادج رو آپدیت کن
+    if (activeTab === 'shop' && isAdmin) {
+      // pending count از خود AdminSubscriptionManager آپدیت میشه via onPendingCountChange
     }
   }, [activeTab]);
 
@@ -363,6 +399,25 @@ if (activeTab === 'projects') {
       return <SubscriptionPage onBack={() => setActiveTab('profile')} onNavigateToSupport={() => setActiveTab('support')} />;
     }
     
+    // صفحه خریدها / مدیریت اشتراک‌ها
+    if (activeTab === 'shop') {
+      if (isAdmin) {
+        return (
+          <AdminSubscriptionManager 
+            onBack={() => setActiveTab('home')} 
+            onPendingCountChange={(count) => setPendingSubCount(count)}
+          />
+        );
+      }
+      return (
+        <MyPurchases 
+          onBack={() => setActiveTab('home')} 
+          onNavigateToSubscription={() => setActiveTab('subscription')}
+          onNavigateToSupport={() => setActiveTab('support')}
+        />
+      );
+    }
+    
     // صفحه اصلی
     return (
       <div className="content">
@@ -498,13 +553,13 @@ if (activeTab === 'projects') {
         <div className="bg-image"></div>
         <div className="bg-overlay"></div>
         
-        {/* لایه شیشه‌ای روی بک‌گراند - فقط در صفحه پشتیبانی */}
-        {(activeTab === 'support' || activeTab === 'adminChat') && <div className="bg-glass-overlay"></div>}
+        {/* لایه شیشه‌ای روی بک‌گراند - در صفحه پشتیبانی و خریدها */}
+        {(activeTab === 'support' || activeTab === 'adminChat' || activeTab === 'shop') && <div className="bg-glass-overlay"></div>}
 
         {/* Content */}
         {renderContent()}
 
-        {/* Bottom Navigation - مخفی در صفحه پشتیبانی */}
+        {/* Bottom Navigation - مخفی در صفحه‌های تمام‌صفحه */}
         {activeTab !== 'support' && activeTab !== 'alphaChannel' && activeTab !== 'adminChat' && (
           <div className="bottom-nav-glass">
             <div className="nav-items">
@@ -536,11 +591,16 @@ if (activeTab === 'projects') {
                 </div>
               </button>
               <button 
-                className={`nav-item-ios ${activeTab === 'templates' ? 'active' : ''}`}
-                onClick={() => setActiveTab('templates')}
+                className={`nav-item-ios ${activeTab === 'shop' ? 'active' : ''}`}
+                onClick={() => setActiveTab('shop')}
               >
-                <LayoutGrid size={22} strokeWidth={activeTab === 'templates' ? 2.5 : 1.5} />
-                <span>{t('templates')}</span>
+                <div className="nav-icon-wrapper">
+                  <ShoppingBag size={22} strokeWidth={activeTab === 'shop' ? 2.5 : 1.5} />
+                  {isAdmin && pendingSubCount > 0 && (
+                    <span className="nav-badge">{pendingSubCount > 99 ? '99+' : pendingSubCount}</span>
+                  )}
+                </div>
+                <span>{isAdmin ? 'اشتراک‌ها' : 'خریدها'}</span>
               </button>
               <button 
                 className={`nav-item-ios ${activeTab === 'profile' ? 'active' : ''}`}
