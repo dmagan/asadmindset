@@ -21,13 +21,14 @@ import {
   ChevronRight,
   ShoppingBag,
   Plus,
-  UserPlus
+  UserPlus,
+  Tag
 } from 'lucide-react';
 import { authService } from '../services/authService';
 
 const API_URL = 'https://asadmindset.com/wp-json/asadmindset/v1';
 
-const AdminSubscriptionManager = ({ onBack, onPendingCountChange }) => {
+const AdminSubscriptionManager = ({ onBack, onPendingCountChange, onNavigateToDiscounts }) => {
   const [subscriptions, setSubscriptions] = useState([]);
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -409,6 +410,32 @@ const AdminSubscriptionManager = ({ onBack, onPendingCountChange }) => {
             <Plus size={20} />
             <span>خرید دستی</span>
           </button>
+          {onNavigateToDiscounts && (
+            <button
+              onClick={onNavigateToDiscounts}
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '6px',
+                padding: '14px 18px',
+                background: 'rgba(139, 92, 246, 0.1)',
+                border: '1px solid rgba(139, 92, 246, 0.25)',
+                borderRadius: '14px',
+                color: '#8b5cf6',
+                fontSize: '11px',
+                fontWeight: '600',
+                fontFamily: 'inherit',
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+                minWidth: '80px'
+              }}
+            >
+              <Tag size={20} />
+              <span>تخفیف‌ها</span>
+            </button>
+          )}
         </div>
 
         {/* Search */}
@@ -791,7 +818,41 @@ const AdminSubscriptionManager = ({ onBack, onPendingCountChange }) => {
               <DetailRow icon={<User size={16} />} label="کاربر" value={selectedSubscription.userName} />
               <DetailRow icon={<Mail size={16} />} label="ایمیل" value={selectedSubscription.userEmail} />
               <DetailRow icon={<Crown size={16} />} label="پلن" value={selectedSubscription.planType === 'monthly' ? 'ماهانه' : selectedSubscription.planType} />
-              <DetailRow icon={<DollarSign size={16} />} label="مبلغ" value={formatPrice(selectedSubscription.amount)} />
+              {selectedSubscription.discountCode ? (
+                <>
+                  <DetailRow icon={<DollarSign size={16} />} label="مبلغ اصلی" value={formatPrice(selectedSubscription.originalAmount)} />
+                  <div style={{
+                    display: 'flex', alignItems: 'center', gap: '8px',
+                    padding: '10px 12px',
+                    background: 'rgba(139, 92, 246, 0.1)',
+                    border: '1px solid rgba(139, 92, 246, 0.2)',
+                    borderRadius: '10px'
+                  }}>
+                    <Tag size={15} style={{ color: '#a78bfa' }} />
+                    <span style={{ fontFamily: 'monospace', color: '#a78bfa', fontSize: '13px', fontWeight: '600' }}>
+                      {selectedSubscription.discountCode}
+                    </span>
+                    <span style={{ color: '#ef4444', fontSize: '12px', fontWeight: '600', marginRight: 'auto' }}>
+                      -{selectedSubscription.discountAmount}$
+                    </span>
+                  </div>
+                  <DetailRow icon={<DollarSign size={16} />} label="مبلغ نهایی" value={
+                    <span style={{ color: '#22c55e', fontWeight: '700' }}>{formatPrice(selectedSubscription.amount)}</span>
+                  } />
+                </>
+              ) : (
+                <DetailRow icon={<DollarSign size={16} />} label="مبلغ" value={formatPrice(selectedSubscription.amount)} />
+              )}
+              {selectedSubscription.isRenewal && (
+                <div style={{
+                  display: 'inline-flex', alignItems: 'center', gap: '4px',
+                  padding: '4px 10px', borderRadius: '6px',
+                  background: 'rgba(99, 102, 241, 0.15)',
+                  color: '#a5b4fc', fontSize: '12px', fontWeight: '600'
+                }}>
+                  تمدید اشتراک
+                </div>
+              )}
               <DetailRow icon={<Calendar size={16} />} label="تاریخ" value={formatDate(selectedSubscription.createdAt)} />
               <DetailRow icon={<AlertCircle size={16} />} label="وضعیت" badge={getStatusInfo(selectedSubscription.status)} />
               {selectedSubscription.status === 'approved' && (
@@ -1096,7 +1157,16 @@ const AdminSubscriptionManager = ({ onBack, onPendingCountChange }) => {
                 type="datetime-local"
                 value={editCreatedAt}
                 onChange={(e) => setEditCreatedAt(e.target.value)}
-                style={{ ...inputStyle, direction: 'ltr', textAlign: 'right' }}
+                style={{
+                  ...inputStyle,
+                  direction: 'ltr',
+                  textAlign: 'right',
+                  fontSize: '13px',
+                  maxWidth: '100%',
+                  minHeight: '44px',
+                  WebkitAppearance: 'none',
+                  MozAppearance: 'none'
+                }}
               />
             </div>
 
@@ -1431,6 +1501,15 @@ const AdminSubscriptionManager = ({ onBack, onPendingCountChange }) => {
           filter: invert(1);
           cursor: pointer;
         }
+        input[type="datetime-local"] {
+          max-width: 100% !important;
+          box-sizing: border-box !important;
+          overflow: hidden !important;
+          text-overflow: ellipsis !important;
+        }
+        input[type="datetime-local"]::-webkit-date-and-time-value {
+          text-align: right;
+        }
       `}</style>
     </div>
   );
@@ -1499,30 +1578,67 @@ const ModalHeader = ({ title, onClose }) => (
 
 const UserSummary = ({ sub }) => (
   <div style={{
-    display: 'flex',
-    alignItems: 'center',
-    gap: '12px',
     padding: '14px',
     background: 'rgba(255,255,255,0.04)',
     borderRadius: '12px',
     marginBottom: '20px'
   }}>
-    <div style={{
-      width: '44px', height: '44px', borderRadius: '50%',
-      background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      fontWeight: '600', fontSize: '18px', color: 'white', flexShrink: 0
-    }}>
-      {sub.userName?.charAt(0) || 'U'}
-    </div>
-    <div>
-      <div style={{ fontSize: '15px', fontWeight: '600', color: 'white', marginBottom: '2px' }}>
-        {sub.userName}
+    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: sub.discountCode ? '12px' : '0' }}>
+      <div style={{
+        width: '44px', height: '44px', borderRadius: '50%',
+        background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontWeight: '600', fontSize: '18px', color: 'white', flexShrink: 0
+      }}>
+        {sub.userName?.charAt(0) || 'U'}
       </div>
-      <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.5)' }}>
-        {sub.userEmail}
+      <div style={{ flex: 1 }}>
+        <div style={{ fontSize: '15px', fontWeight: '600', color: 'white', marginBottom: '2px' }}>
+          {sub.userName}
+        </div>
+        <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.5)' }}>
+          {sub.userEmail}
+        </div>
+      </div>
+      <div style={{ textAlign: 'left' }}>
+        <div style={{ fontSize: '15px', fontWeight: '700', color: 'white' }}>
+          {sub.amount}$
+        </div>
+        {sub.discountCode && sub.originalAmount > sub.amount && (
+          <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)', textDecoration: 'line-through' }}>
+            {sub.originalAmount}$
+          </div>
+        )}
       </div>
     </div>
+    {sub.discountCode && (
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: '8px',
+        padding: '8px 12px',
+        background: 'rgba(139, 92, 246, 0.1)',
+        border: '1px solid rgba(139, 92, 246, 0.2)',
+        borderRadius: '8px'
+      }}>
+        <Tag size={14} style={{ color: '#a78bfa', flexShrink: 0 }} />
+        <span style={{ fontFamily: 'monospace', color: '#a78bfa', fontSize: '13px', fontWeight: '600' }}>
+          {sub.discountCode}
+        </span>
+        <span style={{ color: '#ef4444', fontSize: '12px', fontWeight: '600', marginRight: 'auto' }}>
+          -{sub.discountAmount}$
+        </span>
+      </div>
+    )}
+    {sub.isRenewal && (
+      <div style={{
+        display: 'inline-flex', alignItems: 'center', gap: '4px',
+        padding: '4px 8px', borderRadius: '6px',
+        background: 'rgba(99, 102, 241, 0.15)',
+        color: '#a5b4fc', fontSize: '11px', fontWeight: '600',
+        marginTop: sub.discountCode ? '8px' : '12px'
+      }}>
+        تمدید اشتراک
+      </div>
+    )}
   </div>
 );
 

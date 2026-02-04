@@ -17,6 +17,7 @@ import AlphaChannel from './components/AlphaChannel';
 import SubscriptionPage from './components/SubscriptionPage';
 import MyPurchases from './components/MyPurchases';
 import AdminSubscriptionManager from './components/AdminSubscriptionManager';
+import AdminDiscountManager from './components/AdminDiscountManager';
 import { authService } from './services/authService';
 import Pusher from 'pusher-js';
 
@@ -398,6 +399,15 @@ if (activeTab === 'projects') {
     if (activeTab === 'subscription') {
       return <SubscriptionPage onBack={() => setActiveTab('profile')} onNavigateToSupport={() => setActiveTab('support')} />;
     }
+
+    // صفحه مدیریت کدهای تخفیف (ادمین)
+    if (activeTab === 'adminDiscounts') {
+      return (
+        <AdminDiscountManager 
+          onBack={() => setActiveTab('shop')} 
+        />
+      );
+    }
     
     // صفحه خریدها / مدیریت اشتراک‌ها
     if (activeTab === 'shop') {
@@ -406,6 +416,7 @@ if (activeTab === 'projects') {
           <AdminSubscriptionManager 
             onBack={() => setActiveTab('home')} 
             onPendingCountChange={(count) => setPendingSubCount(count)}
+            onNavigateToDiscounts={() => setActiveTab('adminDiscounts')}
           />
         );
       }
@@ -414,6 +425,7 @@ if (activeTab === 'projects') {
           onBack={() => setActiveTab('home')} 
           onNavigateToSubscription={() => setActiveTab('subscription')}
           onNavigateToSupport={() => setActiveTab('support')}
+          onNavigateToRenewal={(purchaseId) => setActiveTab('subscription')}
         />
       );
     }
@@ -554,7 +566,7 @@ if (activeTab === 'projects') {
         <div className="bg-overlay"></div>
         
         {/* لایه شیشه‌ای روی بک‌گراند - در صفحه پشتیبانی و خریدها */}
-        {(activeTab === 'support' || activeTab === 'adminChat' || activeTab === 'shop') && <div className="bg-glass-overlay"></div>}
+        {(activeTab === 'support' || activeTab === 'adminChat' || activeTab === 'shop' || activeTab === 'adminDiscounts') && <div className="bg-glass-overlay"></div>}
 
         {/* Content */}
         {renderContent()}

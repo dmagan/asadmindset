@@ -23,7 +23,7 @@ const API_URL = 'https://asadmindset.com/wp-json/asadmindset/v1';
 const WALLET_ADDRESS = 'TRJ8KcHydFr3UDytiYmXiBPc1d4df5zGf6';
 const PRICE_PER_MONTH = 25;
 
-const SubscriptionPage = ({ onBack, onNavigateToSupport }) => {
+const SubscriptionPage = ({ onBack, onNavigateToSupport, isRenewal = false, renewedFrom = null }) => {
   const toast = useToast();
   const [selectedMonths, setSelectedMonths] = useState(1);
   const [showMonthPicker, setShowMonthPicker] = useState(false);
@@ -35,6 +35,9 @@ const SubscriptionPage = ({ onBack, onNavigateToSupport }) => {
   const [copied, setCopied] = useState(false);
   const [subscriptionStatus, setSubscriptionStatus] = useState(null);
   const [loadingStatus, setLoadingStatus] = useState(true);
+  const [discountCode, setDiscountCode] = useState('');
+  const [discountResult, setDiscountResult] = useState(null);
+  const [validatingDiscount, setValidatingDiscount] = useState(false);
   const fileInputRef = useRef(null);
   const monthPickerRef = useRef(null);
   const txHashInputRef = useRef(null);
@@ -91,6 +94,42 @@ const SubscriptionPage = ({ onBack, onNavigateToSupport }) => {
   ];
 
   const totalPrice = selectedMonths * PRICE_PER_MONTH;
+  const finalPrice = discountResult ? discountResult.finalAmount : totalPrice;
+
+  // Validate discount code
+  const validateDiscount = async () => {
+    if (!discountCode.trim()) return;
+    setValidatingDiscount(true);
+    setDiscountResult(null);
+    try {
+      const token = authService.getToken();
+      const response = await fetch(`${API_URL}/subscription/validate-discount`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: discountCode.trim(), plan_type: `${selectedMonths}_month`, amount: totalPrice })
+      });
+      const data = await response.json();
+      if (response.ok && data.valid) {
+        setDiscountResult(data);
+        const msg = data.discountPercent > 0 
+          ? `کد تخفیف اعمال شد! ${data.discountPercent}% تخفیف`
+          : `کد تخفیف اعمال شد! ${data.discountAmount}$ تخفیف`;
+        toast.success(msg);
+      } else {
+        toast.error(data.message || 'کد تخفیف نامعتبر است');
+        setDiscountResult(null);
+      }
+    } catch (error) {
+      toast.error('خطا در بررسی کد تخفیف');
+    } finally {
+      setValidatingDiscount(false);
+    }
+  };
+
+  // Reset discount when months change
+  useEffect(() => {
+    setDiscountResult(null);
+  }, [selectedMonths]);
 
   // فیکس iOS scroll
   useEffect(() => {
@@ -202,17 +241,26 @@ const SubscriptionPage = ({ onBack, onNavigateToSupport }) => {
           months: selectedMonths,
           amount: totalPrice,
           payment_proof: receiptImage || '',
-          tx_hash: txHash || ''
+          tx_hash: txHash || '',
+          discount_code: discountCode.trim() || '',
+          is_renewal: isRenewal || (subscriptionStatus?.hasActiveSubscription || false),
+          renewed_from: renewedFrom || (subscriptionStatus?.activeSubscription?.id || null)
         })
       });
 
       const data = await response.json();
 
       if (response.ok) {
-        toast.success('درخواست شما ثبت شد و در حال بررسی است');
+        const isRenewing = isRenewal || subscriptionStatus?.hasActiveSubscription;
+        toast.success(isRenewing 
+          ? 'درخواست تمدید شما ثبت شد و در حال بررسی است' 
+          : 'درخواست شما ثبت شد و در حال بررسی است'
+        );
         setTxHash('');
         setReceiptImage(null);
         setReceiptPreview(null);
+        setDiscountCode('');
+        setDiscountResult(null);
       } else {
         throw new Error(data.message || 'خطا در ثبت درخواست');
       }
@@ -249,6 +297,38 @@ const SubscriptionPage = ({ onBack, onNavigateToSupport }) => {
       {/* Scrollable Content */}
       <div className="alpha-content-area">
         <div style={{ direction: 'rtl' }}>
+
+          {/* Renewal Banner */}
+          {(isRenewal || subscriptionStatus?.hasActiveSubscription) && (
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: '12px',
+              padding: '14px 16px',
+              background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.15), rgba(5, 150, 105, 0.1))',
+              border: '1px solid rgba(16, 185, 129, 0.3)',
+              borderRadius: '14px',
+              marginBottom: '14px'
+            }}>
+              <div style={{
+                width: '40px', height: '40px', borderRadius: '10px',
+                background: 'rgba(16, 185, 129, 0.2)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                color: '#10b981', flexShrink: 0
+              }}>
+                <Crown size={20} />
+              </div>
+              <div>
+                <div style={{ fontSize: '14px', fontWeight: '700', color: '#10b981', marginBottom: '3px' }}>
+                  تمدید اشتراک
+                </div>
+                <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.6)', lineHeight: '1.5' }}>
+                  مدت جدید به انتهای اشتراک فعلی شما اضافه خواهد شد.
+                  {subscriptionStatus?.activeSubscription?.daysRemaining != null && (
+                    <span> ({subscriptionStatus.activeSubscription.daysRemaining} روز باقی‌مانده)</span>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Pending Status Card */}
           {subscriptionStatus?.hasPendingRequest && (
@@ -332,7 +412,52 @@ const SubscriptionPage = ({ onBack, onNavigateToSupport }) => {
 
             {/* Price */}
             <div style={styles.priceSection}>
-              <span style={styles.priceValue}>{totalPrice}$</span>
+              {discountResult ? (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
+                  <span style={{ fontSize: '14px', color: 'rgba(255,255,255,0.4)', textDecoration: 'line-through' }}>{totalPrice}$</span>
+                  <span style={styles.priceValue}>{discountResult.finalAmount}$</span>
+                  <span style={{ fontSize: '12px', color: '#10b981', fontWeight: '600' }}>
+                    {discountResult.discountPercent > 0 ? `${discountResult.discountPercent}% تخفیف` : `${discountResult.discountAmount}$ تخفیف`}
+                  </span>
+                  {discountResult.description && (
+                    <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)' }}>{discountResult.description}</span>
+                  )}
+                </div>
+              ) : (
+                <span style={styles.priceValue}>{totalPrice}$</span>
+              )}
+            </div>
+
+            {/* Discount Code */}
+            <div style={{
+              display: 'flex', gap: '8px', marginBottom: '16px'
+            }}>
+              <input
+                type="text"
+                placeholder="کد تخفیف"
+                value={discountCode}
+                onChange={(e) => { setDiscountCode(e.target.value); setDiscountResult(null); }}
+                style={{
+                  flex: 1, padding: '12px 14px', borderRadius: '12px',
+                  border: discountResult ? '1px solid rgba(16, 185, 129, 0.4)' : '1px solid rgba(255,255,255,0.1)',
+                  background: discountResult ? 'rgba(16, 185, 129, 0.1)' : 'rgba(255,255,255,0.05)',
+                  color: 'white', fontSize: '14px', fontFamily: 'inherit',
+                  outline: 'none', direction: 'ltr', textAlign: 'center'
+                }}
+              />
+              <button
+                onClick={validateDiscount}
+                disabled={validatingDiscount || !discountCode.trim()}
+                style={{
+                  padding: '12px 20px', borderRadius: '12px', border: 'none',
+                  background: discountResult ? 'rgba(16, 185, 129, 0.3)' : 'rgba(99, 102, 241, 0.3)',
+                  color: discountResult ? '#10b981' : '#a5b4fc',
+                  fontSize: '13px', fontWeight: '600', fontFamily: 'inherit', cursor: 'pointer',
+                  opacity: validatingDiscount || !discountCode.trim() ? 0.5 : 1
+                }}
+              >
+                {validatingDiscount ? '...' : discountResult ? '✓' : 'اعمال'}
+              </button>
             </div>
 
             {/* Payment Instructions */}
@@ -440,7 +565,7 @@ const SubscriptionPage = ({ onBack, onNavigateToSupport }) => {
               {submitting ? (
                 <Loader size={20} style={{ animation: 'spin 1s linear infinite' }} />
               ) : (
-                <span>ارسال</span>
+                <span>{(isRenewal || subscriptionStatus?.hasActiveSubscription) ? 'ارسال درخواست تمدید' : 'ارسال'}</span>
               )}
             </button>
           </div>
