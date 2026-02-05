@@ -45,7 +45,7 @@ const getPusher = () => {
   return pusherInstance;
 };
 
-const AlphaChannel = ({ onBack }) => {
+const AlphaChannel = ({ onBack, isAdmin: isAdminProp }) => {
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -55,8 +55,8 @@ const AlphaChannel = ({ onBack }) => {
   const [showNotifications, setShowNotifications] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   
-  // Check if user is admin
-  const isAdmin = authService.getUser()?.nicename === 'admin';
+  // از prop استفاده کن، اگه نبود خودش چک کنه
+  const isAdmin = isAdminProp !== undefined ? isAdminProp : authService.getUser()?.nicename === 'admin';
   
   // Media states
   const [zoomedImage, setZoomedImage] = useState(null);
@@ -408,7 +408,7 @@ const AlphaChannel = ({ onBack }) => {
     if (hours < 24) return `${hours} ساعت پیش`;
     if (days < 7) return `${days} روز پیش`;
     
-    return date.toLocaleDateString('fa-IR');
+    return date.toLocaleDateString('en-US');
   };
 
   // Format audio duration

@@ -323,7 +323,7 @@ const AdminDiscountManager = ({ onBack }) => {
 
   const formatDate = (d) => {
     if (!d) return '-';
-    return new Date(d).toLocaleDateString('fa-IR', { year: 'numeric', month: 'short', day: 'numeric' });
+    return new Date(d).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
   };
 
   const getCodeStatusInfo = (code) => {
@@ -451,8 +451,10 @@ const AdminDiscountManager = ({ onBack }) => {
               const status = getCodeStatusInfo(code);
               return (
                 <div key={code.id} style={{
-                  background: 'rgba(255,255,255,0.03)',
-                  border: '1px solid rgba(255,255,255,0.06)',
+background: 'rgba(255,255,255,0.04)',
+backdropFilter: 'blur(20px)',
+WebkitBackdropFilter: 'blur(20px)',
+border: '1px solid rgba(255,255,255,0.07)',
                   borderRadius: '14px',
                   padding: '14px',
                   transition: 'all 0.2s'
@@ -1129,7 +1131,7 @@ const BottomSheet = ({ children, onClose }) => (
     onClick={onClose}
     style={{
       position: 'fixed', inset: 0,
-      background: 'rgba(0, 0, 0, 0.7)',
+      background: 'rgba(0, 0, 0, 0)',
       backdropFilter: 'blur(8px)',
       display: 'flex', alignItems: 'flex-end',
       justifyContent: 'center', zIndex: 9999
@@ -1139,7 +1141,7 @@ const BottomSheet = ({ children, onClose }) => (
       onClick={e => e.stopPropagation()}
       style={{
         width: '100%', maxWidth: '500px', maxHeight: '95vh',
-        background: 'rgba(20, 20, 35, 0.98)',
+background: 'rgba(0, 0, 0, 0.5)',
         backdropFilter: 'blur(40px)',
         border: '1px solid rgba(255,255,255,0.1)',
         borderRadius: '24px 24px 0 0',

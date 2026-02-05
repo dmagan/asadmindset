@@ -310,7 +310,7 @@ const AdminSubscriptionManager = ({ onBack, onPendingCountChange, onNavigateToDi
   const formatDate = (dateString) => {
     if (!dateString) return '-';
     const date = new Date(dateString);
-    return date.toLocaleDateString('fa-IR', {
+    return date.toLocaleDateString('en-US', {
       year: 'numeric', month: 'short', day: 'numeric',
       hour: '2-digit', minute: '2-digit'
     });
@@ -1523,7 +1523,7 @@ const BottomSheet = ({ children, onClose }) => (
     style={{
       position: 'fixed',
       inset: 0,
-      background: 'rgba(0, 0, 0, 0.7)',
+      background: 'rgba(0, 0, 0, 0)',
       backdropFilter: 'blur(8px)',
       display: 'flex',
       alignItems: 'flex-end',
@@ -1538,7 +1538,7 @@ const BottomSheet = ({ children, onClose }) => (
         width: '100%',
         maxWidth: '500px',
         maxHeight: '95vh',
-        background: 'rgba(20, 20, 35, 0.98)',
+        background: 'rgba(0, 0, 0, 0.5)',
         backdropFilter: 'blur(40px)',
         border: '1px solid rgba(255,255,255,0.1)',
         borderRadius: '24px 24px 0 0',

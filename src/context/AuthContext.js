@@ -1,16 +1,60 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { authService } from '../services/authService';
 
+const API_URL = 'https://asadmindset.com/wp-json/asadmindset/v1';
+
 const AuthContext = createContext(null);
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [permissions, setPermissions] = useState([]);
+
+  // دریافت دسترسی‌های کاربر از سرور
+  const fetchPermissions = useCallback(async () => {
+    try {
+      const token = authService.getToken();
+      if (!token) {
+        setPermissions([]);
+        return;
+      }
+
+      const response = await fetch(`${API_URL}/my-permissions`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setPermissions(data.permissions || []);
+      } else {
+        setPermissions([]);
+      }
+    } catch (e) {
+      console.error('Error fetching permissions:', e);
+      setPermissions([]);
+    }
+  }, []);
+
+  // چک کردن اینکه آیا کاربر یه دسترسی خاص داره
+  const hasPermission = useCallback((perm) => {
+    const currentUser = authService.getUser();
+    // ادمین اصلی همه دسترسی‌ها رو داره
+    if (currentUser?.nicename === 'admin') return true;
+    return permissions.includes(perm);
+  }, [permissions]);
+
+  // چک آیا ادمین اصلی یا ساب‌ادمین با حداقل یه دسترسی هست
+  const isAdminOrSubAdmin = useCallback(() => {
+    const currentUser = authService.getUser();
+    if (currentUser?.nicename === 'admin') return true;
+    return permissions.length > 0;
+  }, [permissions]);
 
   // Handle auth state changes (from token expiry)
   const handleAuthChange = useCallback((isAuthenticated) => {
     if (!isAuthenticated) {
       setUser(null);
+      setPermissions([]);
     }
   }, []);
 
@@ -22,6 +66,8 @@ export const AuthProvider = ({ children }) => {
           setUser(authService.getUser());
           // Start token check timer if user is logged in
           authService.startTokenCheck();
+          // دریافت دسترسی‌ها
+          await fetchPermissions();
         } else {
           authService.logout(false);
         }
@@ -38,17 +84,20 @@ export const AuthProvider = ({ children }) => {
       unsubscribe();
       authService.stopTokenCheck();
     };
-  }, [handleAuthChange]);
+  }, [handleAuthChange, fetchPermissions]);
 
   const login = async (username, password) => {
-  const data = await authService.login(username, password);
-  setUser({
-    email: data.data?.email || data.user_email,
-    name: data.data?.displayName || data.user_display_name,
-    nicename: data.data?.nicename || data.user_nicename,
-  });
-  return data;
-};
+    const data = await authService.login(username, password);
+    setUser({
+      email: data.data?.email || data.user_email,
+      name: data.data?.displayName || data.user_display_name,
+      nicename: data.data?.nicename || data.user_nicename,
+    });
+    // بعد از لاگین، دسترسی‌ها رو بگیر
+    setTimeout(() => fetchPermissions(), 300);
+    return data;
+  };
+
   const loginWithGoogle = async (credential) => {
     const data = await authService.googleLogin(credential);
     setUser({
@@ -56,12 +105,15 @@ export const AuthProvider = ({ children }) => {
       name: data.data?.displayName || data.user_display_name,
       nicename: data.data?.nicename || data.user_nicename,
     });
+    // بعد از لاگین، دسترسی‌ها رو بگیر
+    setTimeout(() => fetchPermissions(), 300);
     return data;
   };
 
   const logout = () => {
     authService.logout(true);
     setUser(null);
+    setPermissions([]);
   };
 
   const updateProfile = async (name) => {
@@ -83,7 +135,11 @@ export const AuthProvider = ({ children }) => {
       updateProfile,
       changePassword,
       loading, 
-      isLoggedIn: !!user 
+      isLoggedIn: !!user,
+      permissions,
+      hasPermission,
+      isAdminOrSubAdmin,
+      fetchPermissions,
     }}>
       {children}
     </AuthContext.Provider>

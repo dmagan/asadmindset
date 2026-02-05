@@ -87,7 +87,7 @@ useEffect(() => {
     if (diff < 3600000) return `${Math.floor(diff / 60000)} دقیقه`;
     if (diff < 86400000) return `${Math.floor(diff / 3600000)} ساعت`;
     
-    return date.toLocaleDateString('fa-IR');
+    return date.toLocaleDateString('en-US');
   };
 
   return (

@@ -18,6 +18,7 @@ import SubscriptionPage from './components/SubscriptionPage';
 import MyPurchases from './components/MyPurchases';
 import AdminSubscriptionManager from './components/AdminSubscriptionManager';
 import AdminDiscountManager from './components/AdminDiscountManager';
+import SubAdminManager from './components/SubAdminManager';
 import { authService } from './services/authService';
 import Pusher from 'pusher-js';
 
@@ -101,10 +102,17 @@ const CutifyGlassDemo = () => {
   const pusherRef = useRef(null);
   const channelRef = useRef(null);
 
-  const { user, isLoggedIn, loading } = useAuth();
+  const { user, isLoggedIn, loading, hasPermission } = useAuth();
   
   // چک کردن اینکه کاربر ادمین هست یا نه
   const isAdmin = authService.getUser()?.nicename === 'admin';
+
+  // چک دسترسی‌های ترکیبی: ادمین اصلی یا ساب‌ادمین با دسترسی مربوطه
+  const canManageSupport = isAdmin || hasPermission('support');
+  const canManageChannel = isAdmin || hasPermission('channel');
+  const canManageSubscriptions = isAdmin || hasPermission('subscriptions');
+  const canManageDiscounts = isAdmin || hasPermission('discounts');
+  const canManualOrder = isAdmin || hasPermission('manual_order');
 
   // دریافت تعداد پیام‌های خوانده نشده
   const fetchUnreadCount = async () => {
@@ -116,8 +124,8 @@ const CutifyGlassDemo = () => {
     try {
       const token = authService.getToken();
       
-      if (isAdmin) {
-        // برای ادمین: مجموع پیام‌های خوانده نشده از همه کاربران
+      if (canManageSupport) {
+        // برای ادمین یا ساب‌ادمین با دسترسی پشتیبانی: مجموع پیام‌های خوانده نشده از همه کاربران
         const response = await fetch(`${API_URL}/admin/conversations`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -145,9 +153,9 @@ const CutifyGlassDemo = () => {
     }
   };
 
-  // دریافت تعداد اشتراک‌های pending (برای ادمین)
+  // دریافت تعداد اشتراک‌های pending (برای ادمین یا ساب‌ادمین با دسترسی اشتراک)
   const fetchPendingSubCount = async () => {
-    if (!isLoggedIn || !isAdmin) {
+    if (!isLoggedIn || !canManageSubscriptions) {
       setPendingSubCount(0);
       return;
     }
@@ -177,19 +185,25 @@ const CutifyGlassDemo = () => {
       forceTLS: true
     });
     
-    if (isAdmin) {
-      // ادمین به کانال admin-support گوش میده
+    if (canManageSupport || canManageSubscriptions) {
+      // ادمین یا ساب‌ادمین با دسترسی پشتیبانی/اشتراک به کانال admin-support گوش میده
       channelRef.current = pusherRef.current.subscribe('admin-support');
-      channelRef.current.bind('new-message', (data) => {
-        // فقط پیام‌های کاربران رو حساب کن
-        if (data.sender === 'user') {
-          setUnreadCount(prev => prev + 1);
-        }
-      });
-      // گوش دادن به درخواست‌های اشتراک جدید
-      channelRef.current.bind('new-subscription', (data) => {
-        setPendingSubCount(prev => prev + 1);
-      });
+      
+      if (canManageSupport) {
+        channelRef.current.bind('new-message', (data) => {
+          // فقط پیام‌های کاربران رو حساب کن
+          if (data.sender === 'user') {
+            setUnreadCount(prev => prev + 1);
+          }
+        });
+      }
+      
+      if (canManageSubscriptions) {
+        // گوش دادن به درخواست‌های اشتراک جدید
+        channelRef.current.bind('new-subscription', (data) => {
+          setPendingSubCount(prev => prev + 1);
+        });
+      }
     } else {
       // کاربر عادی: اول باید conversationId رو بگیره
       try {
@@ -249,8 +263,8 @@ const CutifyGlassDemo = () => {
     if (activeTab === 'support' || activeTab === 'adminChat') {
       setUnreadCount(0);
     }
-    // وقتی ادمین وارد صفحه اشتراک‌ها میشه، بادج رو آپدیت کن
-    if (activeTab === 'shop' && isAdmin) {
+    // وقتی ادمین/ساب‌ادمین وارد صفحه اشتراک‌ها میشه، بادج رو آپدیت کن
+    if (activeTab === 'shop' && canManageSubscriptions) {
       // pending count از خود AdminSubscriptionManager آپدیت میشه via onPendingCountChange
     }
   }, [activeTab]);
@@ -336,7 +350,10 @@ const CutifyGlassDemo = () => {
       // اگه لاگین هست → صفحه پروفایل
       return (
         <div className="content profile-content">
-          <ProfileCard onNavigateToSubscription={() => setActiveTab('subscription')} />
+          <ProfileCard 
+            onNavigateToSubscription={() => setActiveTab('subscription')} 
+            onNavigateToSubAdmin={() => setActiveTab('subAdminManager')}
+          />
         </div>
       );
     }
@@ -352,8 +369,8 @@ if (activeTab === 'projects') {
 
     // صفحه پشتیبانی
     if (activeTab === 'support') {
-      if (isAdmin) {
-        // اگر ادمین هست، لیست گفتگوها رو نشون بده
+      if (canManageSupport) {
+        // اگر ادمین یا ساب‌ادمین با دسترسی پشتیبانی هست، لیست گفتگوها رو نشون بده
         return (
           <AdminConversations 
             onBack={() => setActiveTab('home')} 
@@ -392,7 +409,7 @@ if (activeTab === 'projects') {
     }
     // صفحه کانال آلفا
     if (activeTab === 'alphaChannel') {
-      return <AlphaChannel onBack={() => setActiveTab('alpha')} />;
+      return <AlphaChannel onBack={() => setActiveTab('alpha')} isAdmin={canManageChannel} />;
     }
     
     // صفحه اشتراک
@@ -400,7 +417,16 @@ if (activeTab === 'projects') {
       return <SubscriptionPage onBack={() => setActiveTab('profile')} onNavigateToSupport={() => setActiveTab('support')} />;
     }
 
-    // صفحه مدیریت کدهای تخفیف (ادمین)
+    // صفحه مدیریت کاربران ارشد (فقط ادمین اصلی)
+    if (activeTab === 'subAdminManager') {
+      return (
+        <SubAdminManager 
+          onBack={() => setActiveTab('profile')} 
+        />
+      );
+    }
+
+    // صفحه مدیریت کدهای تخفیف (ادمین یا ساب‌ادمین با دسترسی تخفیف)
     if (activeTab === 'adminDiscounts') {
       return (
         <AdminDiscountManager 
@@ -411,7 +437,7 @@ if (activeTab === 'projects') {
     
     // صفحه خریدها / مدیریت اشتراک‌ها
     if (activeTab === 'shop') {
-      if (isAdmin) {
+      if (canManageSubscriptions) {
         return (
           <AdminSubscriptionManager 
             onBack={() => setActiveTab('home')} 
@@ -566,13 +592,13 @@ if (activeTab === 'projects') {
         <div className="bg-overlay"></div>
         
         {/* لایه شیشه‌ای روی بک‌گراند - در صفحه پشتیبانی و خریدها */}
-        {(activeTab === 'support' || activeTab === 'adminChat' || activeTab === 'shop' || activeTab === 'adminDiscounts') && <div className="bg-glass-overlay"></div>}
+        {(activeTab === 'support' || activeTab === 'adminChat' || activeTab === 'shop' || activeTab === 'adminDiscounts' || activeTab === 'subAdminManager') && <div className="bg-glass-overlay"></div>}
 
         {/* Content */}
         {renderContent()}
 
         {/* Bottom Navigation - مخفی در صفحه‌های تمام‌صفحه */}
-        {activeTab !== 'support' && activeTab !== 'alphaChannel' && activeTab !== 'adminChat' && (
+        {activeTab !== 'support' && activeTab !== 'alphaChannel' && activeTab !== 'adminChat' && activeTab !== 'subAdminManager' && (
           <div className="bottom-nav-glass">
             <div className="nav-items">
               <button 
@@ -608,11 +634,11 @@ if (activeTab === 'projects') {
               >
                 <div className="nav-icon-wrapper">
                   <ShoppingBag size={22} strokeWidth={activeTab === 'shop' ? 2.5 : 1.5} />
-                  {isAdmin && pendingSubCount > 0 && (
+                  {canManageSubscriptions && pendingSubCount > 0 && (
                     <span className="nav-badge">{pendingSubCount > 99 ? '99+' : pendingSubCount}</span>
                   )}
                 </div>
-                <span>{isAdmin ? 'اشتراک‌ها' : 'خریدها'}</span>
+                <span>{canManageSubscriptions ? 'اشتراک‌ها' : 'خریدها'}</span>
               </button>
               <button 
                 className={`nav-item-ios ${activeTab === 'profile' ? 'active' : ''}`}

@@ -10,7 +10,6 @@ import {
   Loader,
   CheckCircle,
   ExternalLink,
-  ChevronDown,
   Clipboard,
   Clock,
   XCircle,
@@ -26,7 +25,6 @@ const PRICE_PER_MONTH = 25;
 const SubscriptionPage = ({ onBack, onNavigateToSupport, isRenewal = false, renewedFrom = null }) => {
   const toast = useToast();
   const [selectedMonths, setSelectedMonths] = useState(1);
-  const [showMonthPicker, setShowMonthPicker] = useState(false);
   const [txHash, setTxHash] = useState('');
   const [receiptImage, setReceiptImage] = useState(null);
   const [receiptPreview, setReceiptPreview] = useState(null);
@@ -39,7 +37,6 @@ const SubscriptionPage = ({ onBack, onNavigateToSupport, isRenewal = false, rene
   const [discountResult, setDiscountResult] = useState(null);
   const [validatingDiscount, setValidatingDiscount] = useState(false);
   const fileInputRef = useRef(null);
-  const monthPickerRef = useRef(null);
   const txHashInputRef = useRef(null);
 
   // Fetch subscription status on mount
@@ -78,19 +75,11 @@ const SubscriptionPage = ({ onBack, onNavigateToSupport, isRenewal = false, rene
     return planType;
   };
 
-  const monthOptions = [
-    { value: 1, label: '۱ ماهه' },
-    { value: 2, label: '۲ ماهه' },
-    { value: 3, label: '۳ ماهه' },
-    { value: 4, label: '۴ ماهه' },
-    { value: 5, label: '۵ ماهه' },
-    { value: 6, label: '۶ ماهه' },
-    { value: 7, label: '۷ ماهه' },
-    { value: 8, label: '۸ ماهه' },
-    { value: 9, label: '۹ ماهه' },
-    { value: 10, label: '۱۰ ماهه' },
-    { value: 11, label: '۱۱ ماهه' },
-    { value: 12, label: '۱۲ ماهه' },
+  const planOptions = [
+    { value: 1, label: '۱ ماهه', subtitle: '1 Month' },
+    { value: 3, label: '۳ ماهه', subtitle: '3 Months' },
+    { value: 6, label: '۶ ماهه', subtitle: '6 Months' },
+    { value: 12, label: '۱ ساله', subtitle: '12 Months' },
   ];
 
   const totalPrice = selectedMonths * PRICE_PER_MONTH;
@@ -147,22 +136,6 @@ const SubscriptionPage = ({ onBack, onNavigateToSupport, isRenewal = false, rene
       }
     };
   }, []);
-
-  // Close dropdown when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (e) => {
-      if (showMonthPicker && monthPickerRef.current && !monthPickerRef.current.contains(e.target)) {
-        setShowMonthPicker(false);
-      }
-    };
-    
-    document.addEventListener('mousedown', handleClickOutside);
-    document.addEventListener('touchstart', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-      document.removeEventListener('touchstart', handleClickOutside);
-    };
-  }, [showMonthPicker]);
 
   const copyAddress = () => {
     navigator.clipboard.writeText(WALLET_ADDRESS);
@@ -271,11 +244,6 @@ const SubscriptionPage = ({ onBack, onNavigateToSupport, isRenewal = false, rene
     }
   };
 
-  const handleSelectMonth = (month) => {
-    setSelectedMonths(month);
-    setShowMonthPicker(false);
-  };
-
   return (
     <div className="support-chat-container">
       {/* Header */}
@@ -371,43 +339,47 @@ const SubscriptionPage = ({ onBack, onNavigateToSupport, isRenewal = false, rene
           <div className="quick-edit-card-glass" style={styles.pricingCard}>
             
 
-            {/* Month Selector */}
-            <div style={styles.monthSelectorContainer} ref={monthPickerRef}>
-              <span style={styles.monthLabel}>مدت اشتراک:</span>
-              <div 
-                style={styles.monthSelector}
-                onClick={() => setShowMonthPicker(!showMonthPicker)}
-              >
-                <span style={styles.monthValue}>
-                  {monthOptions.find(m => m.value === selectedMonths)?.label}
-                </span>
-                <ChevronDown size={20} style={{ 
-                  color: 'rgba(255,255,255,0.6)',
-                  transform: showMonthPicker ? 'rotate(180deg)' : 'rotate(0)',
-                  transition: 'transform 0.2s'
-                }} />
-              </div>
-
-              {/* Month Picker Dropdown - Floating */}
-              {showMonthPicker && (
-                <div style={styles.monthPickerDropdown}>
-                  {monthOptions.map((option) => (
-                    <div
-                      key={option.value}
-                      style={{
-                        ...styles.monthOption,
-                        background: selectedMonths === option.value 
-                          ? 'rgba(16, 185, 129, 0.2)' 
-                          : 'transparent'
-                      }}
-                      onClick={() => handleSelectMonth(option.value)}
-                    >
-                      <span>{option.label}</span>
-                      <span style={styles.monthPrice}>{option.value * PRICE_PER_MONTH}$</span>
-                    </div>
-                  ))}
-                </div>
-              )}
+            {/* Plan Selector - 4 Cards */}
+            <div style={styles.planGrid}>
+              {planOptions.map((option) => {
+                const isSelected = selectedMonths === option.value;
+                return (
+                  <div
+                    key={option.value}
+                    onClick={() => setSelectedMonths(option.value)}
+                    style={{
+                      ...styles.planCard,
+                      border: isSelected 
+                        ? '2px solid rgba(16, 185, 129, 0.8)' 
+                        : '1.5px solid rgba(255, 255, 255, 0.1)',
+                      background: isSelected
+                        ? 'linear-gradient(135deg, rgba(16, 185, 129, 0.2), rgba(16, 185, 129, 0.05))'
+                        : 'rgba(255, 255, 255, 0.04)',
+                      boxShadow: isSelected
+                        ? '0 4px 20px rgba(16, 185, 129, 0.2), inset 0 1px 0 rgba(16, 185, 129, 0.15)'
+                        : 'none'
+                    }}
+                  >
+                    {isSelected && (
+                      <div style={styles.planCheckMark}>
+                        <Check size={12} />
+                      </div>
+                    )}
+                    <span style={{
+                      ...styles.planCardLabel,
+                      color: isSelected ? '#10b981' : 'rgba(255, 255, 255, 0.8)'
+                    }}>
+                      {option.label}
+                    </span>
+                    <span style={{
+                      ...styles.planCardPrice,
+                      color: isSelected ? '#10b981' : 'rgba(255, 255, 255, 0.45)'
+                    }}>
+                      {option.value * PRICE_PER_MONTH}$
+                    </span>
+                  </div>
+                );
+              })}
             </div>
 
             {/* Price */}
@@ -713,69 +685,53 @@ const styles = {
     overflow: 'visible'
   },
 
-  monthSelectorContainer: {
+  planGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(4, 1fr)',
+    gap: '10px',
+    marginBottom: '20px'
+  },
+
+  planCard: {
     position: 'relative',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '6px',
+    padding: '16px 8px',
+    borderRadius: '14px',
+    cursor: 'pointer',
+    transition: 'all 0.25s ease',
+    backdropFilter: 'blur(10px)',
+    WebkitBackdropFilter: 'blur(10px)',
+    minHeight: '80px'
+  },
+
+  planCheckMark: {
+    position: 'absolute',
+    top: '-10px',
+    left: '-5px',
+    width: '20px',
+    height: '20px',
+    borderRadius: '50%',
+    background: 'rgba(16, 185, 129, 0.9)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: '12px',
-    marginBottom: '16px'
+    color: 'white'
   },
 
-  monthLabel: {
-    color: 'rgba(255, 255, 255, 0.7)',
-    fontSize: '14px'
-  },
-
-  monthSelector: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-    padding: '10px 16px',
-    background: 'rgba(255, 255, 255, 0.1)',
-    border: '1px solid rgba(255, 255, 255, 0.2)',
-    borderRadius: '10px',
-    cursor: 'pointer',
-    transition: 'all 0.2s'
-  },
-
-  monthValue: {
-    color: 'white',
+  planCardLabel: {
     fontSize: '15px',
-    fontWeight: '600'
+    fontWeight: '700',
+    transition: 'color 0.2s'
   },
 
-  monthPickerDropdown: {
-    position: 'absolute',
-    top: '100%',
-    left: '50%',
-    transform: 'translateX(-50%)',
-    width: '200px',
-    marginTop: '8px',
-    background: 'rgba(20, 20, 35, 0.98)',
-    border: '1px solid rgba(255, 255, 255, 0.15)',
-    borderRadius: '12px',
-    maxHeight: '250px',
-    overflowY: 'auto',
-    boxShadow: '0 10px 40px rgba(0, 0, 0, 0.5)',
-    zIndex: 1000
-  },
-
-  monthOption: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: '12px 16px',
-    cursor: 'pointer',
-    transition: 'all 0.2s',
-    borderBottom: '1px solid rgba(255, 255, 255, 0.05)',
-    color: 'white',
-    fontSize: '14px'
-  },
-
-  monthPrice: {
-    color: '#10b981',
-    fontWeight: '600'
+  planCardPrice: {
+    fontSize: '13px',
+    fontWeight: '600',
+    transition: 'color 0.2s'
   },
 
   priceSection: {

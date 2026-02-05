@@ -11,14 +11,16 @@ import {
   Eye,
   EyeOff,
   Globe,
-  Crown
+  Crown,
+  Shield
 } from 'lucide-react';
 
-const ProfileCard = ({ onNavigateToSubscription }) => {
+const ProfileCard = ({ onNavigateToSubscription, onNavigateToSubAdmin }) => {
   const { t, i18n } = useTranslation();
   const { user, logout, updateProfile, changePassword } = useAuth();
 
   const currentUser = user || JSON.parse(localStorage.getItem('user') || '{}');
+  const isAdmin = currentUser?.nicename === 'admin';
   
   const [currentView, setCurrentView] = useState('main');
   const [name, setName] = useState(currentUser?.name || '');
@@ -98,6 +100,18 @@ const ProfileCard = ({ onNavigateToSubscription }) => {
           </div>
           <ChevronRight size={20} className="menu-arrow" />
         </button>
+
+        {isAdmin && (
+          <button className="profile-menu-item subadmin-item" onClick={onNavigateToSubAdmin}>
+            <div className="menu-item-left">
+              <div className="menu-icon subadmin-icon">
+                <Shield size={20} />
+              </div>
+              <span className="menu-label">مدیریت کاربران ارشد</span>
+            </div>
+            <ChevronRight size={20} className="menu-arrow" />
+          </button>
+        )}
 
         <button className="profile-menu-item" onClick={() => setCurrentView('editName')}>
           <div className="menu-item-left">
@@ -502,6 +516,21 @@ const ProfileCard = ({ onNavigateToSubscription }) => {
         .profile-menu-item.subscription-item:hover {
           background: linear-gradient(135deg, rgba(251, 191, 36, 0.15) 0%, rgba(245, 158, 11, 0.1) 100%);
           border-color: rgba(251, 191, 36, 0.3);
+        }
+
+        .menu-icon.subadmin-icon {
+          background: linear-gradient(135deg, rgba(139, 92, 246, 0.2) 0%, rgba(99, 102, 241, 0.15) 100%);
+          color: #a78bfa;
+        }
+
+        .profile-menu-item.subadmin-item {
+          background: linear-gradient(135deg, rgba(139, 92, 246, 0.08) 0%, rgba(99, 102, 241, 0.05) 100%);
+          border-color: rgba(139, 92, 246, 0.2);
+        }
+
+        .profile-menu-item.subadmin-item:hover {
+          background: linear-gradient(135deg, rgba(139, 92, 246, 0.15) 0%, rgba(99, 102, 241, 0.1) 100%);
+          border-color: rgba(139, 92, 246, 0.3);
         }
 
         .menu-label {
