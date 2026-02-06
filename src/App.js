@@ -39,6 +39,7 @@ import {
   GraduationCap,
   Brain,
   BookOpen,
+  Loader2,
 } from 'lucide-react';
 
 const CutifyGlassDemo = () => {
@@ -98,14 +99,24 @@ const CutifyGlassDemo = () => {
   // State برای تعداد پیام‌های خوانده نشده
   const [unreadCount, setUnreadCount] = useState(0);
   
+  // State برای تعداد پست‌های خوانده نشده کانال آلفا
+  const [alphaUnreadCount, setAlphaUnreadCount] = useState(0);
+  
   // State برای تعداد اشتراک‌های pending (برای ادمین)
   const [pendingSubCount, setPendingSubCount] = useState(0);
   
   // Ref برای Pusher
   const pusherRef = useRef(null);
   const channelRef = useRef(null);
+  const alphaChannelRef = useRef(null);
+  const activeTabRef = useRef(activeTab);
 
   const { user, isLoggedIn, loading, hasPermission } = useAuth();
+  
+  // Keep activeTabRef in sync
+  useEffect(() => {
+    activeTabRef.current = activeTab;
+  }, [activeTab]);
   
   // چک کردن اینکه کاربر ادمین هست یا نه
   const isAdmin = authService.getUser()?.nicename === 'admin';
@@ -153,6 +164,27 @@ const CutifyGlassDemo = () => {
       }
     } catch (error) {
       console.error('Error fetching unread count:', error);
+    }
+  };
+
+  // دریافت تعداد پست‌های خوانده نشده کانال آلفا
+  const fetchAlphaUnreadCount = async () => {
+    if (!isLoggedIn) {
+      setAlphaUnreadCount(0);
+      return;
+    }
+    
+    try {
+      const token = authService.getToken();
+      const response = await fetch(`${API_URL}/channel/unread-count`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setAlphaUnreadCount(data.count || 0);
+      }
+    } catch (error) {
+      console.error('Error fetching alpha unread count:', error);
     }
   };
 
@@ -241,6 +273,16 @@ const CutifyGlassDemo = () => {
         console.error('Error connecting to pusher:', error);
       }
     }
+    
+    // Subscribe to alpha-channel for badge (all logged-in users)
+    const alphaChannel = pusherRef.current.subscribe('alpha-channel');
+    alphaChannelRef.current = alphaChannel;
+    alphaChannel.bind('new-post', (data) => {
+      // فقط وقتی کاربر در صفحه کانال آلفا نیست بادج رو بالا ببر
+      if (activeTabRef.current !== 'alphaChannel') {
+        setAlphaUnreadCount(prev => prev + 1);
+      }
+    });
   };
 
   // قطع اتصال Pusher
@@ -248,6 +290,10 @@ const CutifyGlassDemo = () => {
     if (channelRef.current) {
       channelRef.current.unbind_all();
       channelRef.current = null;
+    }
+    if (alphaChannelRef.current) {
+      alphaChannelRef.current.unbind_all();
+      alphaChannelRef.current = null;
     }
     if (pusherRef.current) {
       pusherRef.current.disconnect();
@@ -260,10 +306,12 @@ const CutifyGlassDemo = () => {
     if (isLoggedIn) {
       fetchUnreadCount();
       fetchPendingSubCount();
+      fetchAlphaUnreadCount();
       connectPusher();
     } else {
       setUnreadCount(0);
       setPendingSubCount(0);
+      setAlphaUnreadCount(0);
       disconnectPusher();
     }
     
@@ -279,6 +327,15 @@ const CutifyGlassDemo = () => {
       setUnreadCount(0);
     }
     if (activeTab === 'shop' && canManageSubscriptions) {
+    }
+    // وقتی کاربر وارد کانال آلفا میشه، بادج صفر بشه و سرور آپدیت بشه
+    if (activeTab === 'alphaChannel' && isLoggedIn) {
+      setAlphaUnreadCount(0);
+      const token = authService.getToken();
+      fetch(`${API_URL}/channel/mark-read`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      }).catch(err => console.error('Error marking alpha as read:', err));
     }
   }, [activeTab]);
 
@@ -599,11 +656,20 @@ if (activeTab === 'projects') {
         <div 
           className="quick-edit-card-glass menu-card-single"
           onClick={handleAlphaClick}
-          style={{ opacity: alphaSubLoading ? 0.6 : 1, pointerEvents: alphaSubLoading ? 'none' : 'auto' }}
+          style={{ position: 'relative', pointerEvents: alphaSubLoading ? 'none' : 'auto' }}
         >
+          {/* Spinner overlay */}
+          {alphaSubLoading && (
+            <div className="alpha-loading-overlay">
+              <Loader2 size={24} className="alpha-spinner" />
+            </div>
+          )}
           <div className="menu-card-content">
-            <div className="menu-icon-wrapper">
+            <div className="menu-icon-wrapper" style={{ position: 'relative' }}>
               <Rocket size={24} />
+              {alphaUnreadCount > 0 && !alphaSubLoading && (
+                <span className="alpha-badge">{alphaUnreadCount > 100 ? '100+' : alphaUnreadCount}</span>
+              )}
             </div>
             <div className="menu-text-wrapper">
               <span className="menu-item-title">Alpha Group</span>

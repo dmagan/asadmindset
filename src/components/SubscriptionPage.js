@@ -89,9 +89,9 @@ const SubscriptionPage = ({ onBack, onNavigateToSupport, isRenewal = false, rene
   ];
 
   const networkOptions = [
-    { value: 'TRC20', label: 'TRC20', color: '#ef4444' },
-    { value: 'Ethereum', label: 'Ethereum', color: '#627eea' },
-    { value: 'Solana', label: 'Solana', color: '#14f195' },
+    { value: 'TRC20', label: 'Tron', subtitle: 'TRC20', color: '#ef4444', textColor: '#ffffff' },
+    { value: 'Ethereum', label: 'Ethereum', subtitle: 'ERC20', color: '#627eea' },
+    { value: 'Solana', label: 'Solana', subtitle: '', color: '#14f195' },
   ];
 
   const totalPrice = selectedMonths * PRICE_PER_MONTH;
@@ -471,9 +471,10 @@ const SubscriptionPage = ({ onBack, onNavigateToSupport, isRenewal = false, rene
                       onClick={() => setSelectedNetwork(network.value)}
                       style={{
                         display: 'flex',
+                        flexDirection: 'column',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        gap: '6px',
+                        gap: '2px',
                         padding: '14px 8px',
                         borderRadius: '12px',
                         cursor: 'pointer',
@@ -506,27 +507,23 @@ const SubscriptionPage = ({ onBack, onNavigateToSupport, isRenewal = false, rene
                       <span style={{
                         fontSize: '13px',
                         fontWeight: '700',
-                        color: isSelected ? network.color : 'rgba(255, 255, 255, 0.7)'
+                        color: isSelected ? (network.textColor || network.color) : 'rgba(255, 255, 255, 0.7)'
                       }}>
                         {network.label}
                       </span>
+                      {network.subtitle && (
+                        <span style={{
+                          fontSize: '10px',
+                          fontWeight: '500',
+                          color: isSelected ? `${network.textColor || network.color}99` : 'rgba(255, 255, 255, 0.4)'
+                        }}>
+                          {network.subtitle}
+                        </span>
+                      )}
                     </div>
                   );
                 })}
               </div>
-            </div>
-
-            {/* Payment Instructions */}
-            <div style={styles.paymentInfo}>
-              <span style={styles.usdtText}>USDT</span>
-              <span style={styles.networkText}>بر روی</span>
-              <span style={{
-                ...styles.networkBadge,
-                background: selectedNetworkInfo?.color || '#ef4444'
-              }}>
-                شبکه {selectedNetwork}
-              </span>
-              <span style={styles.networkText}>ارسال کنید</span>
             </div>
 
             {/* Wallet Address */}

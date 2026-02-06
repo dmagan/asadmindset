@@ -1,12 +1,8 @@
 const API_URL = 'https://asadmindset.com/wp-json';
 const GOOGLE_CLIENT_ID = '667060896472-7l179s9cfmjmiuv6au75i9p52hhnhl9p.apps.googleusercontent.com';
 
-// Token refresh interval (every 5 minutes)
-const TOKEN_CHECK_INTERVAL = 5 * 60 * 1000;
-
 // Auth state change listeners
 let authListeners = [];
-let tokenCheckTimer = null;
 
 export const authService = {
   // Add listener for auth state changes
@@ -22,51 +18,24 @@ export const authService = {
     authListeners.forEach(cb => cb(isAuthenticated));
   },
 
-  // Check if remember me is enabled
+  // Always remember me (persistent login)
   isRememberMe() {
-    return localStorage.getItem('rememberMe') === 'true';
+    return true;
   },
 
-  // Set remember me preference
+  // Set remember me preference (kept for compatibility)
   setRememberMe(value) {
-    if (value) {
-      localStorage.setItem('rememberMe', 'true');
-    } else {
-      localStorage.removeItem('rememberMe');
-    }
+    localStorage.setItem('rememberMe', 'true');
   },
 
-  // Get storage based on remember me
+  // Always use localStorage for persistent login
   _getStorage() {
-    return this.isRememberMe() ? localStorage : sessionStorage;
+    return localStorage;
   },
 
-  // Start periodic token validation
-  startTokenCheck() {
-    if (tokenCheckTimer) return;
-    
-    // If remember me, don't check token expiry
-    if (this.isRememberMe()) return;
-    
-    tokenCheckTimer = setInterval(async () => {
-      if (this.isLoggedIn()) {
-        const isValid = await this.validateToken();
-        if (!isValid) {
-          console.log('Token expired, logging out...');
-          this.logout(false);
-          this.notifyAuthChange(false);
-        }
-      }
-    }, TOKEN_CHECK_INTERVAL);
-  },
-
-  // Stop periodic token validation
-  stopTokenCheck() {
-    if (tokenCheckTimer) {
-      clearInterval(tokenCheckTimer);
-      tokenCheckTimer = null;
-    }
-  },
+  // No-op: token check not needed with 30-day tokens
+  startTokenCheck() {},
+  stopTokenCheck() {},
   // Google Client ID
   getGoogleClientId() {
     return GOOGLE_CLIENT_ID;
