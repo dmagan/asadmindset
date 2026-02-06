@@ -361,29 +361,80 @@ useEffect(() => {
     return () => document.removeEventListener('click', handleClickOutside);
   }, [showMenu]);
 
+  // Swipe-to-reply refs
+  const swipeTouchStartX = useRef(0);
+  const swipeTouchStartY = useRef(0);
+  const swipeCurrentX = useRef(0);
+  const swipeDirection = useRef(null);
+  const swipeActiveMsg = useRef(null);
+  const swipeThreshold = 60;
+
   const handleTouchStart = (e, msg) => {
+    const touch = e.touches[0];
+    swipeTouchStartX.current = touch.clientX;
+    swipeTouchStartY.current = touch.clientY;
+    swipeCurrentX.current = touch.clientX;
+    swipeDirection.current = null;
+    swipeActiveMsg.current = msg;
+    
     longPressTimer.current = setTimeout(() => {
       const rect = e.target.getBoundingClientRect();
-      
       setSelectedMessage(msg);
       setMenuPosition({ y: rect.top - 60 });
       setShowMenu(true);
-      
-      if (navigator.vibrate) {
-        navigator.vibrate(50);
-      }
+      if (navigator.vibrate) navigator.vibrate(50);
+      swipeDirection.current = 'cancelled';
     }, 500);
   };
 
-  const handleTouchEnd = () => {
-    if (longPressTimer.current) {
-      clearTimeout(longPressTimer.current);
+  const handleTouchEnd = (e) => {
+    if (longPressTimer.current) clearTimeout(longPressTimer.current);
+    
+    if (swipeDirection.current === 'horizontal' && swipeActiveMsg.current) {
+      const diffX = swipeCurrentX.current - swipeTouchStartX.current;
+      const el = e.currentTarget;
+      
+      el.style.transform = 'translateX(0)';
+      el.style.transition = 'transform 0.2s ease';
+      
+      if (Math.abs(diffX) > swipeThreshold) {
+        handleReply(swipeActiveMsg.current);
+        if (navigator.vibrate) navigator.vibrate(30);
+      }
     }
+    
+    swipeActiveMsg.current = null;
+    swipeDirection.current = null;
   };
 
-  const handleTouchMove = () => {
-    if (longPressTimer.current) {
-      clearTimeout(longPressTimer.current);
+  const handleTouchMove = (e) => {
+    if (!swipeActiveMsg.current || swipeDirection.current === 'cancelled') {
+      if (longPressTimer.current) clearTimeout(longPressTimer.current);
+      return;
+    }
+    
+    const touch = e.touches[0];
+    const diffX = touch.clientX - swipeTouchStartX.current;
+    const diffY = touch.clientY - swipeTouchStartY.current;
+    
+    if (!swipeDirection.current) {
+      if (Math.abs(diffX) > 10 || Math.abs(diffY) > 10) {
+        swipeDirection.current = Math.abs(diffX) > Math.abs(diffY) ? 'horizontal' : 'vertical';
+        if (longPressTimer.current) clearTimeout(longPressTimer.current);
+      }
+      return;
+    }
+    
+    if (swipeDirection.current !== 'horizontal') return;
+    
+    swipeCurrentX.current = touch.clientX;
+    const el = e.currentTarget;
+    
+    const absDiff = Math.abs(diffX);
+    if (absDiff > 0) {
+      const moveX = Math.min(absDiff, 80);
+      el.style.transform = `translateX(${diffX > 0 ? moveX : -moveX}px)`;
+      el.style.transition = 'none';
     }
   };
 

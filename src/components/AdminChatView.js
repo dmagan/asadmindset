@@ -442,30 +442,85 @@ useEffect(() => {
     };
   }, [showMenu]);
 
+  // Swipe-to-reply refs
+  const swipeTouchStartX = useRef(0);
+  const swipeTouchStartY = useRef(0);
+  const swipeCurrentX = useRef(0);
+  const swipeDirection = useRef(null); // 'horizontal' | 'vertical' | null
+  const swipeActiveMsg = useRef(null);
+  const swipeThreshold = 60;
+
   const handleTouchStart = (e, msg) => {
+    const touch = e.touches[0];
+    swipeTouchStartX.current = touch.clientX;
+    swipeTouchStartY.current = touch.clientY;
+    swipeCurrentX.current = touch.clientX;
+    swipeDirection.current = null;
+    swipeActiveMsg.current = msg;
+    
+    // Long press for menu
     longPressTimer.current = setTimeout(() => {
       const rect = e.target.getBoundingClientRect();
-      
       setSelectedMessage(msg);
       setMenuPosition({ y: rect.top - 60 });
       setShowMenu(true);
-      
-      if (navigator.vibrate) {
-        navigator.vibrate(50);
-      }
+      if (navigator.vibrate) navigator.vibrate(50);
+      // Reset swipe
+      swipeDirection.current = 'cancelled';
     }, 500);
   };
 
-  const handleTouchEnd = () => {
-    if (longPressTimer.current) {
-      clearTimeout(longPressTimer.current);
+  const handleTouchMove = (e) => {
+    if (!swipeActiveMsg.current || swipeDirection.current === 'cancelled') return;
+    
+    const touch = e.touches[0];
+    const diffX = touch.clientX - swipeTouchStartX.current;
+    const diffY = touch.clientY - swipeTouchStartY.current;
+    
+    // Determine direction on first significant move
+    if (!swipeDirection.current) {
+      if (Math.abs(diffX) > 10 || Math.abs(diffY) > 10) {
+        swipeDirection.current = Math.abs(diffX) > Math.abs(diffY) ? 'horizontal' : 'vertical';
+        // Cancel long press
+        if (longPressTimer.current) clearTimeout(longPressTimer.current);
+      }
+      return;
+    }
+    
+    if (swipeDirection.current !== 'horizontal') return;
+    
+    swipeCurrentX.current = touch.clientX;
+    const el = e.currentTarget;
+    
+    // swipe به هر دو جهت
+    const absDiff = Math.abs(diffX);
+    if (absDiff > 0) {
+      const moveX = Math.min(absDiff, 80);
+      el.style.transform = `translateX(${diffX > 0 ? moveX : -moveX}px)`;
+      el.style.transition = 'none';
     }
   };
 
-  const handleTouchMove = () => {
-    if (longPressTimer.current) {
-      clearTimeout(longPressTimer.current);
+  const handleTouchEnd = (e) => {
+    if (longPressTimer.current) clearTimeout(longPressTimer.current);
+    
+    if (swipeDirection.current === 'horizontal' && swipeActiveMsg.current) {
+      const diffX = swipeCurrentX.current - swipeTouchStartX.current;
+      const el = e.currentTarget;
+      
+      // Reset position
+      el.style.transform = 'translateX(0)';
+      el.style.transition = 'transform 0.2s ease';
+      
+      if (Math.abs(diffX) > swipeThreshold) {
+        // Trigger reply
+        handleReply(swipeActiveMsg.current);
+        if (navigator.vibrate) navigator.vibrate(30);
+      }
     }
+    
+    swipeActiveMsg.current = null;
+    swipeDirection.current = null;
   };
 
   const handleDelete = async (e) => {
