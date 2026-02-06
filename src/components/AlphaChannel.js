@@ -19,7 +19,8 @@ import {
   Send,
   Square,
   Reply,
-  CornerDownLeft
+  CornerDownLeft,
+  Check
 } from 'lucide-react';
 import Pusher from 'pusher-js';
 import { authService } from '../services/authService';
@@ -199,8 +200,24 @@ const AlphaChannel = ({ onBack, isAdmin: isAdminProp }) => {
     channelRef.current.unbind('new-post');
     channelRef.current.bind('new-post', (data) => {
       console.log('New post received:', data);
-      setPosts(prev => [data, ...prev]);
-      playNotificationSound();
+      setPosts(prev => {
+        // If we have a temp post, Pusher event is the real one - replace or skip
+        const hasTempPost = prev.some(p => p._isTemp);
+        if (hasTempPost) {
+          let replaced = false;
+          return prev.map(p => {
+            if (p._isTemp && !replaced) {
+              replaced = true;
+              return { ...data, _isTemp: false, _justSent: true };
+            }
+            return p;
+          });
+        }
+        // Check if already exists
+        if (prev.some(p => p.id === data.id)) return prev;
+        // New post from someone else - no auto scroll
+        return [data, ...prev];
+      });
     });
     
     channelRef.current.unbind('post-updated');
@@ -289,6 +306,23 @@ const AlphaChannel = ({ onBack, isAdmin: isAdminProp }) => {
     
     return () => {};
   }, [loadPosts, loadNotifications, loadUnreadCount, connectPusher]);
+
+  // Fix iOS keyboard pushing content
+  useEffect(() => {
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    if (isMobile) {
+      document.body.style.position = 'fixed';
+      document.body.style.width = '100%';
+      document.body.style.height = '100%';
+    }
+    return () => {
+      if (isMobile) {
+        document.body.style.position = '';
+        document.body.style.width = '';
+        document.body.style.height = '';
+      }
+    };
+  }, []);
 
   // Scroll to bottom after initial posts load
   useEffect(() => {
@@ -692,76 +726,115 @@ const AlphaChannel = ({ onBack, isAdmin: isAdminProp }) => {
       return;
     }
     
-    setSubmitting(true);
+    const savedContent = content.trim();
+    const savedMediaFile = mediaFile;
+    const savedMediaUrl = mediaUrl;
+    const savedMediaType = mediaType;
+    const savedMediaDuration = mediaDuration;
+    const savedReplyingTo = replyingTo;
+    const savedEditingPost = editingPost;
+    
+    // Clear form immediately so user can type next message
+    resetForm();
+    setShowAttachMenu(false);
+    
+    // Keep focus on input (iOS keyboard fix)
+    setTimeout(() => inputRef.current?.focus(), 0);
+    
+    // For edit mode, no optimistic update
+    if (savedEditingPost) {
+      try {
+        const token = authService.getToken();
+        let finalMediaUrl = savedMediaUrl;
+        if (savedMediaFile) {
+          setUploading(true);
+          const uploadResponse = await uploadMediaWithProgress(savedMediaFile, (progress) => setUploadProgress(progress));
+          finalMediaUrl = uploadResponse.url;
+          setUploading(false);
+        }
+        await fetch(`${API_URL}/admin/channel/posts/${savedEditingPost.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authService.getToken()}` },
+          body: JSON.stringify({ content: savedContent, mediaType: savedMediaType, mediaUrl: finalMediaUrl || null, mediaDuration: savedMediaDuration, replyToId: savedReplyingTo?.id || null })
+        });
+        setEditingPost(null);
+      } catch (error) {
+        console.error('Error updating post:', error);
+      } finally {
+        setUploading(false);
+      }
+      return;
+    }
+    
+    // Optimistic update - add temp post immediately
+    const tempId = `temp-${Date.now()}`;
+    const tempPost = {
+      id: tempId,
+      content: savedContent,
+      mediaType: savedMediaFile ? savedMediaType : (savedMediaUrl ? savedMediaType : null),
+      mediaUrl: savedMediaFile ? URL.createObjectURL(savedMediaFile) : savedMediaUrl,
+      mediaDuration: savedMediaDuration,
+      createdAt: new Date().toISOString(),
+      isEdited: false,
+      isPinned: false,
+      viewsCount: 0,
+      reactionsCount: 0,
+      userReacted: false,
+      replyTo: savedReplyingTo ? {
+        id: savedReplyingTo.id,
+        content: savedReplyingTo.content,
+        mediaType: savedReplyingTo.mediaType
+      } : null,
+      _isTemp: true
+    };
+    
+    setPosts(prev => [tempPost, ...prev]);
+    
+    // Scroll to bottom to show new post
+    setTimeout(() => {
+      postsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, 50);
     
     try {
       const token = authService.getToken();
-      let finalMediaUrl = mediaUrl;
+      let finalMediaUrl = savedMediaUrl;
       
-      // Upload media if needed
-      if (mediaFile) {
+      if (savedMediaFile) {
         setUploading(true);
-        const uploadResponse = await uploadMediaWithProgress(
-          mediaFile,
-          (progress) => setUploadProgress(progress)
-        );
+        const uploadResponse = await uploadMediaWithProgress(savedMediaFile, (progress) => setUploadProgress(progress));
         finalMediaUrl = uploadResponse.url;
         setUploading(false);
       }
       
-      const postData = {
-        content: content.trim(),
-        mediaType: mediaType,
-        mediaUrl: finalMediaUrl || null,
-        mediaDuration: mediaDuration,
-        replyToId: replyingTo?.id || null
-      };
+      const response = await fetch(`${API_URL}/admin/channel/posts`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ content: savedContent, mediaType: savedMediaType, mediaUrl: finalMediaUrl || null, mediaDuration: savedMediaDuration, replyToId: savedReplyingTo?.id || null })
+      });
       
-      if (editingPost) {
-        // Update post
-        await fetch(`${API_URL}/admin/channel/posts/${editingPost.id}`, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify(postData)
-        });
-        setEditingPost(null);
-      } else {
-        // Create new post
-        await fetch(`${API_URL}/admin/channel/posts`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify(postData)
-        });
-      }
+      if (!response.ok) throw new Error('Failed to create post');
       
-      // Reset form
-      resetForm();
-      setShowAttachMenu(false);
-      loadPosts(1, false);
+      const data = await response.json();
       
-      // Scroll to bottom after posting
-      setTimeout(() => {
-        postsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-      }, 300);
+      // Replace temp post with real one
+      setPosts(prev => prev.map(p => p.id === tempId ? { ...p, ...data.post, _isTemp: false, _justSent: true } : p));
       
     } catch (error) {
       console.error('Error submitting post:', error);
-      alert('خطا در ثبت پست');
+      // Remove temp post on error
+      setPosts(prev => prev.filter(p => p.id !== tempId));
     } finally {
-      setSubmitting(false);
       setUploading(false);
     }
   };
 
   // Delete post
+  const [deleting, setDeleting] = useState(false);
+  
   const handleDelete = async () => {
-    if (!deletingPost) return;
+    if (!deletingPost || deleting) return;
+    
+    setDeleting(true);
     
     try {
       const token = authService.getToken();
@@ -775,7 +848,8 @@ const AlphaChannel = ({ onBack, isAdmin: isAdminProp }) => {
       setDeletingPost(null);
     } catch (error) {
       console.error('Error deleting post:', error);
-      alert('خطا در حذف پست');
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -1094,6 +1168,12 @@ const AlphaChannel = ({ onBack, isAdmin: isAdminProp }) => {
                 <span className="post-time">
                   {formatTime(post.createdAt)}
                   {post.isEdited && <span className="edited-label"> • ویرایش شده</span>}
+                  {isAdmin && post._isTemp && (
+                    <span className="post-status sending" style={{marginRight:'4px',color:'rgba(255,255,255,0.4)',fontSize:'12px'}}>○</span>
+                  )}
+                  {isAdmin && !post._isTemp && post._justSent && (
+                    <Check size={13} style={{marginRight:'4px',color:'rgba(255,255,255,0.5)',verticalAlign:'middle'}} />
+                  )}
                 </span>
                 <div className="post-counters">
                   <span className="view-count">
@@ -1226,6 +1306,7 @@ const AlphaChannel = ({ onBack, isAdmin: isAdminProp }) => {
               <div className="attach-menu-container" ref={attachMenuRef}>
                 <button 
                   className="attach-btn"
+                  onTouchEnd={(e) => { e.preventDefault(); setShowAttachMenu(!showAttachMenu); }}
                   onClick={() => setShowAttachMenu(!showAttachMenu)}
                 >
                   <Plus size={22} />
@@ -1275,14 +1356,16 @@ const AlphaChannel = ({ onBack, isAdmin: isAdminProp }) => {
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
                 rows={1}
-                disabled={submitting || uploading}
+                disabled={uploading}
               />
             )}
             
             {/* Send or Mic Button */}
             <button 
               className={`send-btn ${isRecording ? 'recording' : ''}`}
-              onClick={() => {
+              onTouchEnd={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
                 if (isRecording) {
                   stopRecording();
                 } else if (content.trim() || mediaFile) {
@@ -1291,11 +1374,19 @@ const AlphaChannel = ({ onBack, isAdmin: isAdminProp }) => {
                   startRecording();
                 }
               }}
-              disabled={submitting || uploading}
+              onClick={(e) => {
+                e.preventDefault();
+                if (isRecording) {
+                  stopRecording();
+                } else if (content.trim() || mediaFile) {
+                  handleSubmit();
+                } else {
+                  startRecording();
+                }
+              }}
+              disabled={uploading}
             >
-              {submitting ? (
-                <Loader2 size={20} className="spinning" />
-              ) : content.trim() || mediaFile ? (
+              {content.trim() || mediaFile ? (
                 <Send size={20} />
               ) : isRecording ? (
                 <Square size={20} />
@@ -1444,16 +1535,12 @@ const AlphaChannel = ({ onBack, isAdmin: isAdminProp }) => {
               <button 
                 className="submit-btn"
                 onClick={handleSubmit}
-                disabled={submitting || uploading || isRecording}
+                disabled={uploading || isRecording}
               >
-                {submitting ? (
-                  <Loader2 size={20} className="spinning" />
-                ) : (
                   <>
                     <Send size={20} />
                     <span>{editingPost ? 'ذخیره' : 'انتشار'}</span>
                   </>
-                )}
               </button>
             </div>
           </div>
@@ -1478,9 +1565,13 @@ const AlphaChannel = ({ onBack, isAdmin: isAdminProp }) => {
               <button className="cancel-btn" onClick={() => setDeletingPost(null)}>
                 انصراف
               </button>
-              <button className="delete-btn" onClick={handleDelete}>
-                <Trash2 size={20} />
-                <span>حذف</span>
+              <button className="delete-btn" onClick={handleDelete} disabled={deleting}>
+                {deleting ? (
+                  <Loader2 size={20} className="spinning" />
+                ) : (
+                  <Trash2 size={20} />
+                )}
+                <span>{deleting ? '... در حال حذف' : 'حذف'}</span>
               </button>
             </div>
           </div>
@@ -2422,7 +2513,7 @@ const AlphaChannel = ({ onBack, isAdmin: isAdminProp }) => {
         
         /* Admin Input Area Styles */
         .admin-input-container {
-          position: absolute;
+          position: fixed;
           bottom: 0;
           left: 0;
           right: 0;
@@ -2431,6 +2522,7 @@ const AlphaChannel = ({ onBack, isAdmin: isAdminProp }) => {
           border-top: 1px solid rgba(255, 255, 255, 0.1);
           padding: 12px 16px;
           padding-bottom: max(12px, env(safe-area-inset-bottom));
+          z-index: 50;
         }
         
         .input-media-preview {

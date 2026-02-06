@@ -580,6 +580,9 @@ useEffect(() => {
     setNewMessage('');
     setReplyingTo(null);
     
+    // Keep focus on input (iOS keyboard fix)
+    setTimeout(() => inputRef.current?.focus(), 0);
+    
     // Optimistic update with 'sending' status
     const localMessage = {
       id: tempId,
@@ -1297,19 +1300,29 @@ useEffect(() => {
           className="message-menu-glass"
           style={{ top: `${menuPosition.y}px` }}
           onClick={(e) => e.stopPropagation()}
+          onTouchStart={(e) => e.stopPropagation()}
         >
-          <button className="menu-item-btn" onClick={() => handleReply(selectedMessage)}>
+          <button className="menu-item-btn" 
+            onTouchEnd={(e) => { e.preventDefault(); e.stopPropagation(); handleReply(selectedMessage); }}
+            onClick={() => handleReply(selectedMessage)}
+          >
             <Reply size={18} />
             <span>Reply</span>
           </button>
           {selectedMessage?.sender === 'user' && !selectedMessage?.image && !selectedMessage?.audio && (
-            <button className="menu-item-btn" onClick={handleEdit}>
+            <button className="menu-item-btn" 
+              onTouchEnd={(e) => { e.preventDefault(); e.stopPropagation(); handleEdit(e); }}
+              onClick={handleEdit}
+            >
               <Edit3 size={18} />
               <span>ویرایش</span>
             </button>
           )}
           {selectedMessage?.sender === 'user' && (
-            <button className="menu-item-btn delete" onClick={handleDelete}>
+            <button className="menu-item-btn delete" 
+              onTouchEnd={(e) => { e.preventDefault(); e.stopPropagation(); handleDelete(e); }}
+              onClick={handleDelete}
+            >
               <Trash2 size={18} />
               <span>حذف</span>
             </button>

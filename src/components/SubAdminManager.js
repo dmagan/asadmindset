@@ -957,7 +957,7 @@ const SubAdminManager = ({ onBack }) => {
     <div className="support-chat-container">
       {renderHeader()}
 
-      <div className="alpha-content-area" style={{ direction: 'rtl' }}>
+      <div className="alpha-content-area" style={{ direction: 'rtl', paddingTop: '20px' }}>
         {renderTabs()}
         {activeTab === 'list' && renderListTab()}
         {activeTab === 'logs' && renderLogsTab()}

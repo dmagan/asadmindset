@@ -608,15 +608,22 @@ useEffect(() => {
   };
 
   const handleSend = async () => {
-    if (!newMessage.trim() || sending) return;
+    const messageText = newMessage.trim();
+    if (!messageText) return;
 
     // Stop typing indicator
     sendTypingIndicator(false);
 
     const tempId = Date.now();
     const time = formatMessageTime(new Date().toISOString());
-    const messageText = newMessage;
     const replyTo = replyingTo;
+    
+    // Clear input immediately so user can type next message
+    setNewMessage('');
+    setReplyingTo(null);
+    
+    // Keep focus on input (iOS keyboard fix)
+    setTimeout(() => inputRef.current?.focus(), 0);
     
     // Optimistic update with 'sending' status
     const localMessage = {
@@ -630,9 +637,6 @@ useEffect(() => {
     
     setMessages(prev => [...prev, localMessage]);
     pendingTempIds.current.add(tempId);
-    setNewMessage('');
-    setReplyingTo(null);
-    setSending(true);
 
     try {
       const token = authService.getToken();
@@ -662,9 +666,6 @@ useEffect(() => {
     } catch (error) {
       console.error('Error sending message:', error);
       setMessages(prev => prev.filter(m => m.id !== tempId));
-      alert('خطا در ارسال پیام');
-    } finally {
-      setSending(false);
     }
   };
 
@@ -1355,7 +1356,7 @@ useEffect(() => {
               <span style={{
                 display: 'block',
                 fontSize: '10px',
-                color: 'rgba(139, 92, 246, 0.7)',
+                color: 'hsla(0, 0%, 50%, 1.00)',
                 marginTop: '2px',
                 textAlign: 'left',
                 fontWeight: '600'
@@ -1377,18 +1378,27 @@ useEffect(() => {
           onTouchStart={(e) => e.stopPropagation()}
           onClick={(e) => e.stopPropagation()}
         >
-          <button className="menu-item-btn" onClick={() => handleReply(selectedMessage)}>
+          <button className="menu-item-btn" 
+            onTouchEnd={(e) => { e.preventDefault(); e.stopPropagation(); handleReply(selectedMessage); }}
+            onClick={() => handleReply(selectedMessage)}
+          >
             <Reply size={18} />
             <span>Reply</span>
           </button>
           {selectedMessage?.sender === 'user' && !selectedMessage?.image && !selectedMessage?.audio && (
-            <button className="menu-item-btn" onClick={handleEdit}>
+            <button className="menu-item-btn" 
+              onTouchEnd={(e) => { e.preventDefault(); e.stopPropagation(); handleEdit(e); }}
+              onClick={handleEdit}
+            >
               <Edit3 size={18} />
               <span>ویرایش</span>
             </button>
           )}
           {selectedMessage?.sender === 'user' && (
-            <button className="menu-item-btn delete" onClick={handleDelete}>
+            <button className="menu-item-btn delete" 
+              onTouchEnd={(e) => { e.preventDefault(); e.stopPropagation(); handleDelete(e); }}
+              onClick={handleDelete}
+            >
               <Trash2 size={18} />
               <span>حذف</span>
             </button>
@@ -1558,7 +1568,7 @@ useEffect(() => {
               onKeyDown={handleKeyDown}
               className="chat-input-glass"
               rows={1}
-              disabled={sending || uploadingVideo}
+              disabled={uploadingVideo}
             />
           )}
           
@@ -1566,7 +1576,7 @@ useEffect(() => {
             className={`chat-send-btn-glass ${isRecording ? 'recording' : ''}`}
             onTouchEnd={handleMicOrSend}
             onMouseDown={handleMicOrSend}
-            disabled={sending || uploadingVideo}
+            disabled={uploadingVideo}
           >
             {newMessage.trim() ? (
               <Send size={20} />

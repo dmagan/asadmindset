@@ -15,8 +15,9 @@ const LoginCard = ({ onSuccess }) => {
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState('');
-  const [currentView, setCurrentView] = useState('login'); // login, forgotPassword, register
+  const [currentView, setCurrentView] = useState('login');
   const [googleReady, setGoogleReady] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
 
   // Load Google Sign-In script
   useEffect(() => {
@@ -64,6 +65,7 @@ const LoginCard = ({ onSuccess }) => {
     setGoogleLoading(true);
 
     try {
+      authService.setRememberMe(rememberMe);
       await loginWithGoogle(response.credential);
       if (onSuccess) onSuccess();
     } catch (err) {
@@ -86,6 +88,7 @@ const LoginCard = ({ onSuccess }) => {
     setLoading(true);
 
     try {
+      authService.setRememberMe(rememberMe);
       await login(username, password);
       if (onSuccess) onSuccess();
     } catch (err) {
@@ -160,6 +163,19 @@ const LoginCard = ({ onSuccess }) => {
             </>
           )}
         </button>
+
+        <div className="remember-me-row">
+          <label className="remember-me-label" onClick={(e) => e.stopPropagation()}>
+            <input
+              type="checkbox"
+              checked={rememberMe}
+              onChange={(e) => setRememberMe(e.target.checked)}
+              className="remember-me-checkbox"
+            />
+            <span className="remember-me-custom"></span>
+            <span className="remember-me-text">{t('rememberMe', 'Remember me')}</span>
+          </label>
+        </div>
 
         <button 
           type="button" 
@@ -433,6 +449,55 @@ const LoginCard = ({ onSuccess }) => {
           border-top-color: white;
           border-radius: 50%;
           animation: spin 0.8s linear infinite;
+        }
+
+        .remember-me-row {
+          display: flex;
+          align-items: center;
+          margin-top: -8px;
+        }
+
+        .remember-me-label {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          cursor: pointer;
+          user-select: none;
+        }
+
+        .remember-me-checkbox {
+          display: none;
+        }
+
+        .remember-me-custom {
+          width: 20px;
+          height: 20px;
+          border-radius: 6px;
+          border: 1.5px solid rgba(255, 255, 255, 0.25);
+          background: rgba(255, 255, 255, 0.06);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: all 0.2s;
+          flex-shrink: 0;
+          position: relative;
+        }
+
+        .remember-me-checkbox:checked + .remember-me-custom {
+          background: linear-gradient(135deg, #3b82f6, #2563eb);
+          border-color: #3b82f6;
+        }
+
+        .remember-me-checkbox:checked + .remember-me-custom::after {
+          content: '✓';
+          color: white;
+          font-size: 13px;
+          font-weight: 700;
+        }
+
+        .remember-me-text {
+          color: rgba(255, 255, 255, 0.6);
+          font-size: 14px;
         }
 
         @keyframes spin {

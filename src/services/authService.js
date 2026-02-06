@@ -22,16 +22,38 @@ export const authService = {
     authListeners.forEach(cb => cb(isAuthenticated));
   },
 
+  // Check if remember me is enabled
+  isRememberMe() {
+    return localStorage.getItem('rememberMe') === 'true';
+  },
+
+  // Set remember me preference
+  setRememberMe(value) {
+    if (value) {
+      localStorage.setItem('rememberMe', 'true');
+    } else {
+      localStorage.removeItem('rememberMe');
+    }
+  },
+
+  // Get storage based on remember me
+  _getStorage() {
+    return this.isRememberMe() ? localStorage : sessionStorage;
+  },
+
   // Start periodic token validation
   startTokenCheck() {
     if (tokenCheckTimer) return;
+    
+    // If remember me, don't check token expiry
+    if (this.isRememberMe()) return;
     
     tokenCheckTimer = setInterval(async () => {
       if (this.isLoggedIn()) {
         const isValid = await this.validateToken();
         if (!isValid) {
           console.log('Token expired, logging out...');
-          this.logout(false); // Don't reload, just clear data
+          this.logout(false);
           this.notifyAuthChange(false);
         }
       }
@@ -133,6 +155,9 @@ export const authService = {
     this.stopTokenCheck();
     localStorage.removeItem('token');
     localStorage.removeItem('user');
+    localStorage.removeItem('rememberMe');
+    sessionStorage.removeItem('token');
+    sessionStorage.removeItem('user');
     if (shouldReload) {
       window.location.reload();
     }
@@ -160,7 +185,7 @@ export const authService = {
     if (!token) return false;
 
     try {
-      const response = await fetch(`${API_URL}/jwt-auth/v1/token/validate`, {
+      const response = await fetch(`${API_URL}/asadmindset/v1/token/validate`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
