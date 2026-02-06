@@ -4,6 +4,7 @@ import {
   Crown,
   Clock,
   CheckCircle,
+  Check,
   XCircle,
   Eye,
   X,
@@ -22,11 +23,37 @@ import {
   ShoppingBag,
   Plus,
   UserPlus,
-  Tag
+  Tag,
+  Globe
 } from 'lucide-react';
 import { authService } from '../services/authService';
 
 const API_URL = 'https://asadmindset.com/wp-json/asadmindset/v1';
+
+// گزینه‌های پلن
+const planOptions = [
+  { value: '1_month', label: '۱ ماهه', days: 30, subtitle: '1 Month' },
+  { value: '3_month', label: '۳ ماهه', days: 90, subtitle: '3 Months' },
+  { value: '6_month', label: '۶ ماهه', days: 180, subtitle: '6 Months' },
+  { value: '12_month', label: '۱ ساله', days: 365, subtitle: '12 Months' },
+];
+
+// تبدیل planType به تعداد روز
+const planTypeToDays = (planType) => {
+  const found = planOptions.find(p => p.value === planType);
+  if (found) return found.days;
+  const match = planType?.match(/(\d+)/);
+  if (match) return parseInt(match[1]) * 30;
+  return 30;
+};
+
+// تبدیل planType به لیبل فارسی
+const formatPlanLabel = (planType) => {
+  const found = planOptions.find(p => p.value === planType);
+  if (found) return found.label;
+  if (planType === 'monthly') return '۱ ماهه';
+  return planType || '—';
+};
 
 const AdminSubscriptionManager = ({ onBack, onPendingCountChange, onNavigateToDiscounts }) => {
   const [subscriptions, setSubscriptions] = useState([]);
@@ -53,6 +80,8 @@ const AdminSubscriptionManager = ({ onBack, onPendingCountChange, onNavigateToDi
 
   const [editStatus, setEditStatus] = useState('');
   const [editCreatedAt, setEditCreatedAt] = useState('');
+  const [showNotifyConfirm, setShowNotifyConfirm] = useState(false);
+  const [pendingEditData, setPendingEditData] = useState(null);
 
   // Manual subscription form
   const [manualEmail, setManualEmail] = useState('');
@@ -168,25 +197,44 @@ const AdminSubscriptionManager = ({ onBack, onPendingCountChange, onNavigateToDi
     }
   };
 
-  const handleEditStatus = async () => {
+  const handleEditStatus = async (notifyUser = null) => {
     if (!selectedSubscription) return;
     setProcessing(true);
     try {
       const data = {
         status: editStatus,
         duration_days: editStatus === 'approved' ? durationDays : undefined,
-        admin_note: adminNote
+        admin_note: adminNote,
+        notify_user: notifyUser
       };
       if (editCreatedAt) {
         data.created_at = editCreatedAt.replace('T', ' ') + ':00';
       }
-      await fetch(`${API_URL}/admin/subscriptions/${selectedSubscription.id}/update-status`, {
+      const response = await fetch(`${API_URL}/admin/subscriptions/${selectedSubscription.id}/update-status`, {
         method: 'PUT',
         headers: getHeaders(),
         body: JSON.stringify(data)
       });
-      setShowEditModal(false);
-      resetModals();
+      
+      if (!response.ok) throw new Error('Failed');
+      
+      // اگه notify هنوز تعیین نشده و وضعیت approved هست → نشون بده confirm
+      if (notifyUser === null && editStatus === 'approved') {
+        const result = await response.json();
+        setPendingEditData({
+          subscriptionId: selectedSubscription.id,
+          oldExpiresAt: selectedSubscription.expiresAt,
+          newExpiresAt: result.expiresAt || null,
+          durationDays: durationDays,
+          userName: selectedSubscription.userName
+        });
+        setShowEditModal(false);
+        setShowNotifyConfirm(true);
+      } else {
+        setShowEditModal(false);
+        setShowNotifyConfirm(false);
+        resetModals();
+      }
       loadSubscriptions();
       loadStats();
     } catch (error) {
@@ -194,6 +242,28 @@ const AdminSubscriptionManager = ({ onBack, onPendingCountChange, onNavigateToDi
     } finally {
       setProcessing(false);
     }
+  };
+  
+  // ارسال نوتیفیکیشن بعد از ویرایش
+  const handleNotifyUser = async (shouldNotify) => {
+    if (shouldNotify && pendingEditData) {
+      try {
+        await fetch(`${API_URL}/admin/subscriptions/${pendingEditData.subscriptionId}/notify`, {
+          method: 'POST',
+          headers: getHeaders(),
+          body: JSON.stringify({ 
+            duration_days: pendingEditData.durationDays,
+            old_expires_at: pendingEditData.oldExpiresAt,
+            new_expires_at: pendingEditData.newExpiresAt
+          })
+        });
+      } catch (error) {
+        console.error('Error sending notification:', error);
+      }
+    }
+    setShowNotifyConfirm(false);
+    setPendingEditData(null);
+    resetModals();
   };
 
   const handleSoftDelete = async () => {
@@ -331,6 +401,20 @@ const AdminSubscriptionManager = ({ onBack, onPendingCountChange, onNavigateToDi
         return { icon: <XCircle size={14} />, label: 'رد شده', color: '#ef4444', bg: 'rgba(239, 68, 68, 0.15)' };
       default:
         return { icon: <Clock size={14} />, label: status, color: '#9ca3af', bg: 'rgba(156, 163, 175, 0.15)' };
+    }
+  };
+
+  // Network badge helper
+  const getNetworkInfo = (network) => {
+    switch (network) {
+      case 'TRC20':
+        return { color: '#ef4444', bg: 'rgba(239, 68, 68, 0.15)', border: 'rgba(239, 68, 68, 0.3)' };
+      case 'Ethereum':
+        return { color: '#627eea', bg: 'rgba(98, 126, 234, 0.15)', border: 'rgba(98, 126, 234, 0.3)' };
+      case 'Solana':
+        return { color: '#14f195', bg: 'rgba(20, 241, 149, 0.15)', border: 'rgba(20, 241, 149, 0.3)' };
+      default:
+        return { color: '#9ca3af', bg: 'rgba(156, 163, 175, 0.15)', border: 'rgba(156, 163, 175, 0.3)' };
     }
   };
 
@@ -566,6 +650,7 @@ const AdminSubscriptionManager = ({ onBack, onPendingCountChange, onNavigateToDi
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
             {filteredSubscriptions.map((sub) => {
               const statusInfo = getStatusInfo(sub.status);
+              const networkInfo = getNetworkInfo(sub.network);
               return (
                 <div
                   key={sub.id}
@@ -620,16 +705,17 @@ const AdminSubscriptionManager = ({ onBack, onPendingCountChange, onNavigateToDi
                     </span>
                   </div>
 
-                  {/* Middle Row: Plan + Amount + Date */}
+                  {/* Middle Row: Plan + Network + Amount + Date */}
                   <div style={{
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '12px',
+                    gap: '8px',
                     fontSize: '12px',
                     color: 'rgba(255,255,255,0.55)',
                     marginBottom: '12px',
                     paddingBottom: '10px',
-                    borderBottom: '1px solid rgba(255,255,255,0.06)'
+                    borderBottom: '1px solid rgba(255,255,255,0.06)',
+                    flexWrap: 'wrap'
                   }}>
                     <span style={{
                       display: 'inline-flex',
@@ -643,8 +729,28 @@ const AdminSubscriptionManager = ({ onBack, onPendingCountChange, onNavigateToDi
                       fontWeight: '500'
                     }}>
                       <Crown size={12} />
-                      {sub.planType === 'monthly' ? 'ماهانه' : sub.planType}
+                      {formatPlanLabel(sub.planType)}
                     </span>
+                    
+                    {/* Network Badge */}
+                    {sub.network && (
+                      <span style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '3px',
+                        padding: '3px 7px',
+                        background: networkInfo.bg,
+                        border: `1px solid ${networkInfo.border}`,
+                        borderRadius: '6px',
+                        color: networkInfo.color,
+                        fontSize: '10px',
+                        fontWeight: '600'
+                      }}>
+                        <Globe size={10} />
+                        {sub.network}
+                      </span>
+                    )}
+                    
                     {sub.isManual && (
                       <span style={{
                         display: 'inline-flex',
@@ -674,6 +780,27 @@ const AdminSubscriptionManager = ({ onBack, onPendingCountChange, onNavigateToDi
                       </span>
                     )}
                     <span>{formatPrice(sub.amount)}</span>
+                    {sub.status === 'approved' && sub.expiresAt && (() => {
+                      const remaining = Math.max(0, Math.ceil((new Date(sub.expiresAt) - new Date()) / 86400000));
+                      const isExpired = remaining === 0;
+                      const isLow = remaining > 0 && remaining <= 7;
+                      return (
+                        <span style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '3px',
+                          padding: '3px 7px',
+                          background: isExpired ? 'rgba(239, 68, 68, 0.12)' : isLow ? 'rgba(251, 191, 36, 0.12)' : 'rgba(34, 197, 94, 0.12)',
+                          borderRadius: '6px',
+                          color: isExpired ? '#f87171' : isLow ? '#fbbf24' : '#34d399',
+                          fontSize: '10px',
+                          fontWeight: '600'
+                        }}>
+                          <Clock size={10} />
+                          {isExpired ? 'منقضی' : `${remaining} روز`}
+                        </span>
+                      );
+                    })()}
                     <span style={{ marginRight: 'auto' }}>{formatDate(sub.createdAt)}</span>
                   </div>
 
@@ -712,7 +839,7 @@ const AdminSubscriptionManager = ({ onBack, onPendingCountChange, onNavigateToDi
                               color="#22c55e"
                               bg="rgba(34, 197, 94, 0.15)"
                               label="تایید"
-                              onClick={() => { setSelectedSubscription(sub); setDurationDays(30); setAdminNote(''); setShowApproveModal(true); }}
+                              onClick={() => { setSelectedSubscription(sub); setDurationDays(planTypeToDays(sub.planType)); setAdminNote(''); setShowApproveModal(true); }}
                             />
                             <ActionBtn
                               icon={<XCircle size={16} />}
@@ -730,7 +857,7 @@ const AdminSubscriptionManager = ({ onBack, onPendingCountChange, onNavigateToDi
                           onClick={() => {
                             setSelectedSubscription(sub);
                             setEditStatus(sub.status);
-                            setDurationDays(30);
+                            setDurationDays(planTypeToDays(sub.planType));
                             setAdminNote('');
                             const created = sub.createdAt ? sub.createdAt.replace(' ', 'T').slice(0, 16) : '';
                             setEditCreatedAt(created);
@@ -817,7 +944,19 @@ const AdminSubscriptionManager = ({ onBack, onPendingCountChange, onNavigateToDi
             <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
               <DetailRow icon={<User size={16} />} label="کاربر" value={selectedSubscription.userName} />
               <DetailRow icon={<Mail size={16} />} label="ایمیل" value={selectedSubscription.userEmail} />
-              <DetailRow icon={<Crown size={16} />} label="پلن" value={selectedSubscription.planType === 'monthly' ? 'ماهانه' : selectedSubscription.planType} />
+              <DetailRow icon={<Crown size={16} />} label="پلن" value={formatPlanLabel(selectedSubscription.planType)} />
+              
+              {/* Network Display */}
+              {selectedSubscription.network && (
+                <DetailRow 
+                  icon={<Globe size={16} />} 
+                  label="شبکه" 
+                  value={
+                    <NetworkBadge network={selectedSubscription.network} />
+                  } 
+                />
+              )}
+              
               {selectedSubscription.discountCode ? (
                 <>
                   <DetailRow icon={<DollarSign size={16} />} label="مبلغ اصلی" value={formatPrice(selectedSubscription.originalAmount)} />
@@ -907,7 +1046,7 @@ const AdminSubscriptionManager = ({ onBack, onPendingCountChange, onNavigateToDi
                     icon={<CheckCircle size={18} />}
                     label="تایید"
                     gradient="linear-gradient(135deg, #22c55e, #16a34a)"
-                    onClick={() => { setShowDetailModal(false); setDurationDays(30); setAdminNote(''); setShowApproveModal(true); }}
+                    onClick={() => { setShowDetailModal(false); setDurationDays(planTypeToDays(selectedSubscription.planType)); setAdminNote(''); setShowApproveModal(true); }}
                   />
                   <ModalActionBtn
                     icon={<XCircle size={18} />}
@@ -926,7 +1065,7 @@ const AdminSubscriptionManager = ({ onBack, onPendingCountChange, onNavigateToDi
                 onClick={() => {
                   setShowDetailModal(false);
                   setEditStatus(selectedSubscription.status);
-                  setDurationDays(30);
+                  setDurationDays(planTypeToDays(selectedSubscription.planType));
                   setAdminNote('');
                   const created = selectedSubscription.createdAt ? selectedSubscription.createdAt.replace(' ', 'T').slice(0, 16) : '';
                   setEditCreatedAt(created);
@@ -952,6 +1091,71 @@ const AdminSubscriptionManager = ({ onBack, onPendingCountChange, onNavigateToDi
           <ModalHeader title="تایید اشتراک" onClose={() => setShowApproveModal(false)} />
           <div style={{ padding: '20px', overflowY: 'auto' }}>
             <UserSummary sub={selectedSubscription} />
+
+            {/* نمایش پلن انتخابی کاربر */}
+            <div style={{ marginBottom: '20px' }}>
+              <label style={labelStyle}>پلن انتخابی کاربر</label>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px', marginBottom: '10px' }}>
+                {planOptions.map((option) => {
+                  const isSelected = selectedSubscription.planType === option.value;
+                  return (
+                    <div
+                      key={option.value}
+                      style={{
+                        position: 'relative',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '4px',
+                        padding: '12px 6px',
+                        borderRadius: '12px',
+                        border: isSelected 
+                          ? '2px solid rgba(139, 92, 246, 0.7)' 
+                          : '1.5px solid rgba(255, 255, 255, 0.08)',
+                        background: isSelected
+                          ? 'linear-gradient(135deg, rgba(139, 92, 246, 0.2), rgba(139, 92, 246, 0.05))'
+                          : 'rgba(255, 255, 255, 0.03)',
+                        opacity: isSelected ? 1 : 0.35,
+                        cursor: 'default',
+                      }}
+                    >
+                      {isSelected && (
+                        <div style={{
+                          position: 'absolute',
+                          top: '-8px',
+                          right: '-8px',
+                          width: '18px',
+                          height: '18px',
+                          borderRadius: '50%',
+                          background: 'rgba(139, 92, 246, 0.9)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          color: 'white'
+                        }}>
+                          <Check size={10} />
+                        </div>
+                      )}
+                      <span style={{
+                        fontSize: '14px',
+                        fontWeight: '700',
+                        color: isSelected ? '#c4b5fd' : 'rgba(255, 255, 255, 0.5)'
+                      }}>
+                        {option.label}
+                      </span>
+                      <span style={{
+                        fontSize: '11px',
+                        fontWeight: '500',
+                        color: isSelected ? 'rgba(196, 181, 253, 0.6)' : 'rgba(255, 255, 255, 0.3)'
+                      }}>
+                        {option.days} روز
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
 
             <div style={{ marginBottom: '20px' }}>
               <label style={labelStyle}>مدت اشتراک (روز)</label>
@@ -1011,6 +1215,7 @@ const AdminSubscriptionManager = ({ onBack, onPendingCountChange, onNavigateToDi
         </BottomSheet>
       )}
 
+
       {/* Reject Modal */}
       {showRejectModal && selectedSubscription && (
         <BottomSheet onClose={() => setShowRejectModal(false)}>
@@ -1065,6 +1270,71 @@ const AdminSubscriptionManager = ({ onBack, onPendingCountChange, onNavigateToDi
           <ModalHeader title="ویرایش وضعیت" onClose={() => setShowEditModal(false)} />
           <div style={{ padding: '20px', overflowY: 'auto' }}>
             <UserSummary sub={selectedSubscription} />
+
+            {/* نمایش پلن انتخابی کاربر */}
+            <div style={{ marginBottom: '16px' }}>
+              <label style={labelStyle}>پلن انتخابی کاربر</label>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px' }}>
+                {planOptions.map((option) => {
+                  const isSelected = selectedSubscription.planType === option.value;
+                  return (
+                    <div
+                      key={option.value}
+                      style={{
+                        position: 'relative',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '4px',
+                        padding: '12px 6px',
+                        borderRadius: '12px',
+                        border: isSelected 
+                          ? '2px solid rgba(139, 92, 246, 0.7)' 
+                          : '1.5px solid rgba(255, 255, 255, 0.08)',
+                        background: isSelected
+                          ? 'linear-gradient(135deg, rgba(139, 92, 246, 0.2), rgba(139, 92, 246, 0.05))'
+                          : 'rgba(255, 255, 255, 0.03)',
+                        opacity: isSelected ? 1 : 0.35,
+                        cursor: 'default',
+                      }}
+                    >
+                      {isSelected && (
+                        <div style={{
+                          position: 'absolute',
+                          top: '-8px',
+                          right: '-8px',
+                          width: '18px',
+                          height: '18px',
+                          borderRadius: '50%',
+                          background: 'rgba(139, 92, 246, 0.9)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          color: 'white'
+                        }}>
+                          <Check size={10} />
+                        </div>
+                      )}
+                      <span style={{
+                        fontSize: '14px',
+                        fontWeight: '700',
+                        color: isSelected ? '#c4b5fd' : 'rgba(255, 255, 255, 0.5)'
+                      }}>
+                        {option.label}
+                      </span>
+                      <span style={{
+                        fontSize: '11px',
+                        fontWeight: '500',
+                        color: isSelected ? 'rgba(196, 181, 253, 0.6)' : 'rgba(255, 255, 255, 0.3)'
+                      }}>
+                        {option.days} روز
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
 
             {/* Current status */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
@@ -1183,7 +1453,7 @@ const AdminSubscriptionManager = ({ onBack, onPendingCountChange, onNavigateToDi
 
             <div style={{ display: 'flex', gap: '10px' }}>
               <button onClick={() => setShowEditModal(false)} style={cancelBtnStyle}>انصراف</button>
-              <button onClick={handleEditStatus} disabled={processing} style={{
+              <button onClick={() => handleEditStatus()} disabled={processing} style={{
                 ...confirmBtnStyle,
                 background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
                 opacity: processing ? 0.6 : 1
@@ -1194,6 +1464,46 @@ const AdminSubscriptionManager = ({ onBack, onPendingCountChange, onNavigateToDi
           </div>
         </BottomSheet>
       )}
+
+      {/* Notify User Confirm Modal */}
+      {showNotifyConfirm && pendingEditData && (
+        <BottomSheet onClose={() => handleNotifyUser(false)}>
+          <div style={{ padding: '30px 20px', textAlign: 'center' }}>
+            <div style={{
+              width: '64px', height: '64px', borderRadius: '50%',
+              background: 'rgba(99, 102, 241, 0.15)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              margin: '0 auto 16px'
+            }}>
+              <Mail size={28} style={{ color: '#818cf8' }} />
+            </div>
+            <h3 style={{ color: 'white', fontSize: '17px', fontWeight: '600', margin: '0 0 8px' }}>
+              اطلاع‌رسانی به کاربر
+            </h3>
+            <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '14px', margin: '0 0 24px', lineHeight: '1.6' }}>
+              تغییرات با موفقیت اعمال شد.<br />
+              آیا می‌خواهید به <strong style={{ color: 'white' }}>{pendingEditData.userName}</strong> پیام اطلاع‌رسانی ارسال شود؟
+            </p>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button onClick={() => handleNotifyUser(false)} style={{
+                ...cancelBtnStyle,
+                flex: 1
+              }}>
+                خیر
+              </button>
+              <button onClick={() => handleNotifyUser(true)} style={{
+                ...confirmBtnStyle,
+                flex: 1,
+                background: 'linear-gradient(135deg, #6366f1, #8b5cf6)'
+              }}>
+                <Mail size={16} />
+                <span>بله، ارسال شود</span>
+              </button>
+            </div>
+          </div>
+        </BottomSheet>
+      )}
+
 
       {/* Delete Confirm Modal */}
       {showDeleteConfirm && selectedSubscription && (
@@ -1611,6 +1921,12 @@ const UserSummary = ({ sub }) => (
         )}
       </div>
     </div>
+    {/* Network Badge in Summary */}
+    {sub.network && (
+      <div style={{ marginBottom: sub.discountCode ? '8px' : '0', marginTop: '8px' }}>
+        <NetworkBadge network={sub.network} />
+      </div>
+    )}
     {sub.discountCode && (
       <div style={{
         display: 'flex', alignItems: 'center', gap: '8px',
@@ -1634,13 +1950,49 @@ const UserSummary = ({ sub }) => (
         padding: '4px 8px', borderRadius: '6px',
         background: 'rgba(99, 102, 241, 0.15)',
         color: '#a5b4fc', fontSize: '11px', fontWeight: '600',
-        marginTop: sub.discountCode ? '8px' : '12px'
+        marginTop: sub.discountCode || sub.network ? '8px' : '12px'
       }}>
         تمدید اشتراک
       </div>
     )}
   </div>
 );
+
+// Network Badge Component
+const NetworkBadge = ({ network }) => {
+  const getInfo = () => {
+    switch (network) {
+      case 'TRC20':
+        return { color: '#ef4444', bg: 'rgba(239, 68, 68, 0.15)', border: 'rgba(239, 68, 68, 0.3)' };
+      case 'Ethereum':
+        return { color: '#627eea', bg: 'rgba(98, 126, 234, 0.15)', border: 'rgba(98, 126, 234, 0.3)' };
+      case 'Solana':
+        return { color: '#14f195', bg: 'rgba(20, 241, 149, 0.15)', border: 'rgba(20, 241, 149, 0.3)' };
+      default:
+        return { color: '#9ca3af', bg: 'rgba(156, 163, 175, 0.15)', border: 'rgba(156, 163, 175, 0.3)' };
+    }
+  };
+  
+  const info = getInfo();
+  
+  return (
+    <span style={{
+      display: 'inline-flex',
+      alignItems: 'center',
+      gap: '5px',
+      padding: '4px 10px',
+      background: info.bg,
+      border: `1px solid ${info.border}`,
+      borderRadius: '8px',
+      color: info.color,
+      fontSize: '12px',
+      fontWeight: '600'
+    }}>
+      <Globe size={12} />
+      {network}
+    </span>
+  );
+};
 
 const StatCard = ({ icon, value, label, color }) => (
   <div style={{

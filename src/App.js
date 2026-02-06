@@ -89,6 +89,9 @@ const CutifyGlassDemo = () => {
   // State برای ذخیره صفحه‌ای که کاربر می‌خواست بره و نیاز به لاگین داشت
   const [pendingTab, setPendingTab] = useState(null);
   
+  // State برای چک اشتراک آلفا
+  const [alphaSubLoading, setAlphaSubLoading] = useState(false);
+  
   // State برای ذخیره conversation انتخاب شده توسط ادمین
   const [selectedConversationId, setSelectedConversationId] = useState(null);
   
@@ -272,7 +275,7 @@ const CutifyGlassDemo = () => {
   // تابع برای تغییر تب با چک کردن لاگین
   const handleTabChange = (tab) => {
     // اگر تب نیاز به لاگین داره و کاربر لاگین نیست
-    const protectedTabs = ['support']; // تب‌هایی که نیاز به لاگین دارن
+    const protectedTabs = ['support', 'shop']; // تب‌هایی که نیاز به لاگین دارن
     
     if (protectedTabs.includes(tab) && !isLoggedIn) {
       // ذخیره تب مقصد و نمایش صفحه لاگین
@@ -283,9 +286,82 @@ const CutifyGlassDemo = () => {
     }
   };
 
+  // تابع چک اشتراک و هدایت به صفحه مناسب آلفا
+  const handleAlphaClick = async () => {
+    if (!isLoggedIn) {
+      // کاربر لاگین نیست → صفحه معرفی آلفا (لندینگ)
+      setActiveTab('alpha');
+      return;
+    }
+    
+    // کاربر لاگین هست → چک اشتراک
+    setAlphaSubLoading(true);
+    try {
+      const token = authService.getToken();
+      const response = await fetch(`${API_URL}/subscription/status`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        if (data.hasActiveSubscription) {
+          // اشتراک فعال داره → مستقیم به کانال آلفا
+          setActiveTab('alphaChannel');
+        } else {
+          // اشتراک نداره یا تمام شده → صفحه خرید اشتراک
+          setActiveTab('subscription');
+        }
+      } else {
+        // خطا در چک اشتراک → صفحه معرفی آلفا
+        setActiveTab('alpha');
+      }
+    } catch (error) {
+      console.error('Error checking subscription:', error);
+      setActiveTab('alpha');
+    } finally {
+      setAlphaSubLoading(false);
+    }
+  };
+
+  // تابع هندل کلیک "عضویت" در صفحه AlphaPage
+  const handleAlphaJoin = () => {
+    if (!isLoggedIn) {
+      // لاگین نیست → بره صفحه لاگین، بعد لاگین چک اشتراک بشه
+      setPendingTab('alphaCheck');
+      setActiveTab('profile');
+    } else {
+      // لاگین هست → بره صفحه خرید اشتراک
+      setActiveTab('subscription');
+    }
+  };
+
   // تابعی که بعد از لاگین موفق صدا زده میشه
-  const handleLoginSuccess = () => {
-    if (pendingTab) {
+  const handleLoginSuccess = async () => {
+    if (pendingTab === 'alphaCheck') {
+      // بعد لاگین از مسیر آلفا → چک اشتراک
+      setPendingTab(null);
+      setAlphaSubLoading(true);
+      try {
+        const token = authService.getToken();
+        const response = await fetch(`${API_URL}/subscription/status`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (response.ok) {
+          const data = await response.json();
+          if (data.hasActiveSubscription) {
+            setActiveTab('alphaChannel');
+          } else {
+            setActiveTab('subscription');
+          }
+        } else {
+          setActiveTab('subscription');
+        }
+      } catch (error) {
+        console.error('Error checking subscription after login:', error);
+        setActiveTab('subscription');
+      } finally {
+        setAlphaSubLoading(false);
+      }
+    } else if (pendingTab) {
       // اگر صفحه‌ای منتظر بود، برو به اون صفحه
       setActiveTab(pendingTab);
       setPendingTab(null);
@@ -405,16 +481,16 @@ if (activeTab === 'projects') {
     }
     // صفحه آلفا
     if (activeTab === 'alpha') {
-      return <AlphaPage onBack={() => setActiveTab('home')} onOpenChannel={() => setActiveTab('alphaChannel')} />;
+      return <AlphaPage onBack={() => setActiveTab('home')} onOpenChannel={handleAlphaJoin} />;
     }
     // صفحه کانال آلفا
     if (activeTab === 'alphaChannel') {
-      return <AlphaChannel onBack={() => setActiveTab('alpha')} isAdmin={canManageChannel} />;
+      return <AlphaChannel onBack={() => setActiveTab('home')} isAdmin={canManageChannel} />;
     }
     
     // صفحه اشتراک
     if (activeTab === 'subscription') {
-      return <SubscriptionPage onBack={() => setActiveTab('profile')} onNavigateToSupport={() => setActiveTab('support')} />;
+      return <SubscriptionPage onBack={() => setActiveTab('home')} onNavigateToSupport={() => setActiveTab('support')} />;
     }
 
     // صفحه مدیریت کاربران ارشد (فقط ادمین اصلی)
@@ -512,70 +588,71 @@ if (activeTab === 'projects') {
         {/* Alpha Card */}
         <div 
           className="quick-edit-card-glass menu-card-single"
-          onClick={() => setActiveTab('alpha')}
+          onClick={handleAlphaClick}
+          style={{ opacity: alphaSubLoading ? 0.6 : 1, pointerEvents: alphaSubLoading ? 'none' : 'auto' }}
         >
           <div className="menu-card-content">
             <div className="menu-icon-wrapper">
               <Rocket size={24} />
             </div>
             <div className="menu-text-wrapper">
-              <span className="menu-item-title">Alpha</span>
+              <span className="menu-item-title">Alpha Group</span>
               <span className="menu-item-desc"></span>
             </div>
           </div>
           <ChevronRight size={22} className="menu-chevron" />
         </div>
 
-        {/* Academy Card */}
-        <div 
-          className="quick-edit-card-glass menu-card-single"
-          onClick={() => setActiveTab('academy')}
-        >
-          <div className="menu-card-content">
-            <div className="menu-icon-wrapper">
-              <GraduationCap size={24} />
-            </div>
-            <div className="menu-text-wrapper">
-              <span className="menu-item-title">Academy</span>
-              <span className="menu-item-desc"></span>
-            </div>
-          </div>
-          <ChevronRight size={22} className="menu-chevron" />
-        </div>
+       {/* Academy Card - Coming Soon */}
+<div 
+  className="quick-edit-card-glass menu-card-single menu-card-disabled"
+  style={{ opacity: 0.5, cursor: 'not-allowed' }}
+>
+  <div className="menu-card-content">
+    <div className="menu-icon-wrapper">
+      <GraduationCap size={24} />
+    </div>
+    <div className="menu-text-wrapper">
+      <span className="menu-item-title">Academy</span>
+      <span className="menu-item-desc" style={{ color: 'rgba(255,255,255,0.5)', fontSize: '14px' }}>Coming Soon...</span>
+    </div>
+  </div>
+  <ChevronRight size={22} className="menu-chevron" style={{ opacity: 0.3 }} />
+</div>
 
-        {/* Mindset Card */}
-        <div 
-          className="quick-edit-card-glass menu-card-single"
-          onClick={() => setActiveTab('mindset')}
-        >
-          <div className="menu-card-content">
-            <div className="menu-icon-wrapper">
-              <Brain size={24} />
-            </div>
-            <div className="menu-text-wrapper">
-              <span className="menu-item-title">Mindset</span>
-              <span className="menu-item-desc"></span>
-            </div>
-          </div>
-          <ChevronRight size={22} className="menu-chevron" />
-        </div>
+{/* Mindset Card - Coming Soon */}
+<div 
+  className="quick-edit-card-glass menu-card-single menu-card-disabled"
+  style={{ opacity: 0.5, cursor: 'not-allowed' }}
+>
+  <div className="menu-card-content">
+    <div className="menu-icon-wrapper">
+      <Brain size={24} />
+    </div>
+    <div className="menu-text-wrapper">
+      <span className="menu-item-title">Mindset</span>
+      <span className="menu-item-desc" style={{ color: 'rgba(255,255,255,0.5)', fontSize: '14px' }}>Coming Soon...</span>
+    </div>
+  </div>
+  <ChevronRight size={22} className="menu-chevron" style={{ opacity: 0.3 }} />
+</div>
 
-        {/* Books Card */}
-        <div 
-          className="quick-edit-card-glass menu-card-single"
-          onClick={() => setActiveTab('books')}
-        >
-          <div className="menu-card-content">
-            <div className="menu-icon-wrapper">
-              <BookOpen size={24} />
-            </div>
-            <div className="menu-text-wrapper">
-              <span className="menu-item-title">Books</span>
-              <span className="menu-item-desc"></span>
-            </div>
-          </div>
-          <ChevronRight size={22} className="menu-chevron" />
-        </div>
+{/* Books Card - Coming Soon */}
+<div 
+  className="quick-edit-card-glass menu-card-single menu-card-disabled"
+  style={{ opacity: 0.5, cursor: 'not-allowed' }}
+>
+  <div className="menu-card-content">
+    <div className="menu-icon-wrapper">
+      <BookOpen size={24} />
+    </div>
+    <div className="menu-text-wrapper">
+      <span className="menu-item-title">Books</span>
+      <span className="menu-item-desc" style={{ color: 'rgba(255,255,255,0.5)', fontSize: '14px' }}>Coming Soon...</span>
+    </div>
+  </div>
+  <ChevronRight size={22} className="menu-chevron" style={{ opacity: 0.3 }} />
+</div>
 
  
 
@@ -630,7 +707,7 @@ if (activeTab === 'projects') {
               </button>
               <button 
                 className={`nav-item-ios ${activeTab === 'shop' ? 'active' : ''}`}
-                onClick={() => setActiveTab('shop')}
+                onClick={() => handleTabChange('shop')}
               >
                 <div className="nav-icon-wrapper">
                   <ShoppingBag size={22} strokeWidth={activeTab === 'shop' ? 2.5 : 1.5} />

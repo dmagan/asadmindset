@@ -19,12 +19,19 @@ import { authService } from '../services/authService';
 import { useToast } from './Toast';
 
 const API_URL = 'https://asadmindset.com/wp-json/asadmindset/v1';
-const WALLET_ADDRESS = 'TRJ8KcHydFr3UDytiYmXiBPc1d4df5zGf6';
 const PRICE_PER_MONTH = 25;
+
+// آدرس کیف پول برای هر شبکه
+const WALLET_ADDRESSES = {
+  TRC20: 'TRJ8KcHydFr3UDytiYmXiBPc1d4df5zGf6',
+  Ethereum: '--------------xxxxxxxx---------------.',
+  Solana: '-------------Test----------------'
+};
 
 const SubscriptionPage = ({ onBack, onNavigateToSupport, isRenewal = false, renewedFrom = null }) => {
   const toast = useToast();
   const [selectedMonths, setSelectedMonths] = useState(1);
+  const [selectedNetwork, setSelectedNetwork] = useState('TRC20');
   const [txHash, setTxHash] = useState('');
   const [receiptImage, setReceiptImage] = useState(null);
   const [receiptPreview, setReceiptPreview] = useState(null);
@@ -63,7 +70,6 @@ const SubscriptionPage = ({ onBack, onNavigateToSupport, isRenewal = false, rene
   // تبدیل plan_type به متن فارسی
   const formatPlanType = (planType) => {
     if (!planType) return '';
-    // Extract number from plan_type like "1_month", "2_month", etc.
     const match = planType.match(/(\d+)/);
     if (match) {
       const months = match[1];
@@ -82,8 +88,15 @@ const SubscriptionPage = ({ onBack, onNavigateToSupport, isRenewal = false, rene
     { value: 12, label: '۱ ساله', subtitle: '12 Months' },
   ];
 
+  const networkOptions = [
+    { value: 'TRC20', label: 'TRC20', color: '#ef4444' },
+    { value: 'Ethereum', label: 'Ethereum', color: '#627eea' },
+    { value: 'Solana', label: 'Solana', color: '#14f195' },
+  ];
+
   const totalPrice = selectedMonths * PRICE_PER_MONTH;
   const finalPrice = discountResult ? discountResult.finalAmount : totalPrice;
+  const currentWalletAddress = WALLET_ADDRESSES[selectedNetwork];
 
   // Validate discount code
   const validateDiscount = async () => {
@@ -138,7 +151,7 @@ const SubscriptionPage = ({ onBack, onNavigateToSupport, isRenewal = false, rene
   }, []);
 
   const copyAddress = () => {
-    navigator.clipboard.writeText(WALLET_ADDRESS);
+    navigator.clipboard.writeText(currentWalletAddress);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -215,6 +228,7 @@ const SubscriptionPage = ({ onBack, onNavigateToSupport, isRenewal = false, rene
           amount: totalPrice,
           payment_proof: receiptImage || '',
           tx_hash: txHash || '',
+          network: selectedNetwork,
           discount_code: discountCode.trim() || '',
           is_renewal: isRenewal || (subscriptionStatus?.hasActiveSubscription || false),
           renewed_from: renewedFrom || (subscriptionStatus?.activeSubscription?.id || null)
@@ -243,6 +257,8 @@ const SubscriptionPage = ({ onBack, onNavigateToSupport, isRenewal = false, rene
       setSubmitting(false);
     }
   };
+
+  const selectedNetworkInfo = networkOptions.find(n => n.value === selectedNetwork);
 
   return (
     <div className="support-chat-container">
@@ -432,11 +448,84 @@ const SubscriptionPage = ({ onBack, onNavigateToSupport, isRenewal = false, rene
               </button>
             </div>
 
+            {/* Network Selector */}
+            <div style={{ marginBottom: '16px' }}>
+              <div style={{ 
+                fontSize: '13px', 
+                color: 'rgba(255,255,255,0.6)', 
+                marginBottom: '10px',
+                textAlign: 'center'
+              }}>
+                شبکه انتقال را انتخاب کنید
+              </div>
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(3, 1fr)',
+                gap: '8px'
+              }}>
+                {networkOptions.map((network) => {
+                  const isSelected = selectedNetwork === network.value;
+                  return (
+                    <div
+                      key={network.value}
+                      onClick={() => setSelectedNetwork(network.value)}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '6px',
+                        padding: '14px 8px',
+                        borderRadius: '12px',
+                        cursor: 'pointer',
+                        transition: 'all 0.25s ease',
+                        border: isSelected 
+                          ? `2px solid ${network.color}` 
+                          : '1.5px solid rgba(255, 255, 255, 0.1)',
+                        background: isSelected
+                          ? `${network.color}20`
+                          : 'rgba(255, 255, 255, 0.04)',
+                        position: 'relative'
+                      }}
+                    >
+                      {isSelected && (
+                        <div style={{
+                          position: 'absolute',
+                          top: '-8px',
+                          left: '-8px',
+                          width: '18px',
+                          height: '18px',
+                          borderRadius: '50%',
+                          background: network.color,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center'
+                        }}>
+                          <Check size={10} color="white" />
+                        </div>
+                      )}
+                      <span style={{
+                        fontSize: '13px',
+                        fontWeight: '700',
+                        color: isSelected ? network.color : 'rgba(255, 255, 255, 0.7)'
+                      }}>
+                        {network.label}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
             {/* Payment Instructions */}
             <div style={styles.paymentInfo}>
               <span style={styles.usdtText}>USDT</span>
               <span style={styles.networkText}>بر روی</span>
-              <span style={styles.networkBadge}>شبکه TRC20</span>
+              <span style={{
+                ...styles.networkBadge,
+                background: selectedNetworkInfo?.color || '#ef4444'
+              }}>
+                شبکه {selectedNetwork}
+              </span>
               <span style={styles.networkText}>ارسال کنید</span>
             </div>
 
@@ -445,7 +534,7 @@ const SubscriptionPage = ({ onBack, onNavigateToSupport, isRenewal = false, rene
               <div style={styles.copyIcon}>
                 {copied ? <Check size={18} /> : <Copy size={18} />}
               </div>
-              <span style={styles.addressText}>{WALLET_ADDRESS}</span>
+              <span style={styles.addressText}>{currentWalletAddress}</span>
             </div>
 
             {/* Tutorial Button */}
@@ -470,15 +559,12 @@ const SubscriptionPage = ({ onBack, onNavigateToSupport, isRenewal = false, rene
                   const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
                   
                   if (isIOS) {
-                    // iOS: Focus and select to show native paste menu
                     if (txHashInputRef.current) {
                       txHashInputRef.current.focus();
                       txHashInputRef.current.select();
-                      // Trigger paste menu
                       document.execCommand('selectAll');
                     }
                   } else {
-                    // Desktop/Android: Use clipboard API
                     if (navigator.clipboard && navigator.clipboard.readText) {
                       navigator.clipboard.readText().then(text => {
                         setTxHash(text);
