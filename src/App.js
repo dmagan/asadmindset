@@ -199,6 +199,14 @@ const CutifyGlassDemo = () => {
             setUnreadCount(prev => prev + 1);
           }
         });
+        
+        // وقتی یکی از تیم پیام‌ها رو خوند، بادج همه آپدیت بشه
+        channelRef.current.bind('messages-read', (data) => {
+          if (data.readBy === 'admin') {
+            // مستقیم از سرور تعداد واقعی رو بگیر
+            fetchUnreadCount();
+          }
+        });
       }
       
       if (canManageSubscriptions) {
@@ -258,7 +266,7 @@ const CutifyGlassDemo = () => {
     return () => {
       disconnectPusher();
     };
-  }, [isLoggedIn]);
+  }, [isLoggedIn, canManageSupport, canManageSubscriptions]);
 
   // وقتی کاربر وارد صفحه پشتیبانی میشه، unread رو صفر کن
   // (mark as read سمت سرور توسط SupportChat انجام میشه)

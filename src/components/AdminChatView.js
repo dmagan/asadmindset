@@ -80,6 +80,7 @@ useEffect(() => {
   const pusherRef = useRef(null);
   const channelRef = useRef(null);
   const messageRefs = useRef({});
+  const pendingTempIds = useRef(new Set()); // temp IDs of messages we are sending
   
   // Scroll to message and highlight
   const scrollToMessage = (messageId) => {
@@ -174,6 +175,7 @@ useEffect(() => {
         audio: msg.type === 'audio' ? msg.mediaUrl : null,
         duration: msg.duration || 0,
         sender: msg.sender === 'admin' ? 'user' : 'support',
+        senderName: msg.sender === 'admin' ? (msg.senderName || null) : null,
         time: formatMessageTime(msg.createdAt),
         edited: msg.isEdited,
         status: msg.status || 'sent',
@@ -207,7 +209,7 @@ useEffect(() => {
     
     channelRef.current = pusherRef.current.subscribe(`conversation-${conversationId}`);
     
-    // New message from user (for admin view)
+    // New message (from user or other admin team members)
     channelRef.current.bind('new-message', (data) => {
       if (data.sender === 'user') {
         const newMsg = {
@@ -233,6 +235,46 @@ useEffect(() => {
         
         // Mark as read immediately since chat is open
         markMessagesAsRead();
+      } else if (data.sender === 'admin') {
+        // اگه ما pending temp داریم یعنی خودمون فرستادیم
+        // Pusher زودتر از API response رسیده → tempId رو با real id عوض کن
+        if (pendingTempIds.current.size > 0) {
+          const tempId = Array.from(pendingTempIds.current)[0];
+          setMessages(prev => {
+            if (prev.some(m => m.id === data.id)) return prev; // already replaced
+            const hasTempMsg = prev.some(m => m.id === tempId);
+            if (hasTempMsg) {
+              pendingTempIds.current.delete(tempId);
+              return prev.map(m => m.id === tempId ? { ...m, id: data.id, status: 'sent' } : m);
+            }
+            return prev;
+          });
+          return;
+        }
+        // پیام از ادمین/ساب‌ادمین دیگه
+        setMessages(prev => {
+          if (prev.some(m => m.id === data.id)) return prev;
+          const newMsg = {
+            id: data.id,
+            text: data.type === 'text' ? data.content : null,
+            image: data.type === 'image' ? data.mediaUrl : null,
+            video: data.type === 'video' ? data.mediaUrl : null,
+            audio: data.type === 'audio' ? data.mediaUrl : null,
+            duration: data.duration || 0,
+            sender: 'user', // admin messages appear on right
+            senderName: data.senderName || null,
+            time: formatMessageTime(data.createdAt),
+            edited: false,
+            status: 'sent',
+            replyTo: data.replyTo ? {
+              id: data.replyTo.id,
+              type: data.replyTo.type,
+              content: data.replyTo.content,
+              sender: data.replyTo.sender === 'admin' ? 'user' : 'support'
+            } : null
+          };
+          return [...prev, newMsg];
+        });
       }
     });
     
@@ -343,8 +385,13 @@ useEffect(() => {
   };
 
 
+  const prevMessageCountRef = useRef(0);
   useEffect(() => {
-    scrollToBottom();
+    // فقط وقتی پیام جدید اضافه شد scroll کن، نه وقتی edit/delete شد
+    if (messages.length > prevMessageCountRef.current) {
+      scrollToBottom();
+    }
+    prevMessageCountRef.current = messages.length;
   }, [messages]);
 
   useEffect(() => {
@@ -366,15 +413,19 @@ useEffect(() => {
   }, []);
 
   useEffect(() => {
-    const handleClickOutside = () => {
-      if (showMenu) {
+    const handleClickOutside = (e) => {
+      if (showMenu && !e.target.closest('.message-menu-glass')) {
         setShowMenu(false);
         setSelectedMessage(null);
       }
     };
     
-    document.addEventListener('click', handleClickOutside);
-    return () => document.removeEventListener('click', handleClickOutside);
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('touchstart', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+    };
   }, [showMenu]);
 
   const handleTouchStart = (e, msg) => {
@@ -509,6 +560,7 @@ useEffect(() => {
     };
     
     setMessages(prev => [...prev, localMessage]);
+    pendingTempIds.current.add(tempId);
     setNewMessage('');
     setReplyingTo(null);
     setSending(true);
@@ -533,6 +585,7 @@ useEffect(() => {
       const data = await response.json();
       
       // Update to 'sent' status
+      pendingTempIds.current.delete(tempId);
       setMessages(prev => prev.map(m => 
         m.id === tempId ? { ...m, id: data.message.id, status: 'sent' } : m
       ));
@@ -583,6 +636,7 @@ useEffect(() => {
         replyTo: replyTo
       };
       setMessages(prev => [...prev, localMessage]);
+      pendingTempIds.current.add(tempId);
     };
     reader.readAsDataURL(file);
     setReplyingTo(null);
@@ -621,6 +675,7 @@ useEffect(() => {
       
       const messageData = await messageResponse.json();
       
+      pendingTempIds.current.delete(tempId);
       setMessages(prev => prev.map(m => 
         m.id === tempId ? { ...m, id: messageData.message.id, image: uploadData.url, status: 'sent' } : m
       ));
@@ -681,6 +736,7 @@ useEffect(() => {
       replyTo: replyTo
     };
     setMessages(prev => [...prev, localMessage]);
+    pendingTempIds.current.add(tempId);
 
     try {
       const token = authService.getToken();
@@ -743,6 +799,7 @@ useEffect(() => {
       
       const messageData = await messageResponse.json();
       
+      pendingTempIds.current.delete(tempId);
       setMessages(prev => prev.map(m => 
         m.id === tempId ? { 
           ...m, 
@@ -820,6 +877,7 @@ useEffect(() => {
           replyTo: replyTo
         };
         setMessages(prev => [...prev, localMessage]);
+        pendingTempIds.current.add(tempId);
         setReplyingTo(null);
 
         try {
@@ -857,6 +915,7 @@ useEffect(() => {
           
           const messageData = await messageResponse.json();
           
+          pendingTempIds.current.delete(tempId);
           setMessages(prev => prev.map(m => 
             m.id === tempId ? { ...m, id: messageData.message.id, audio: uploadData.url, status: 'sent' } : m
           ));
@@ -1204,6 +1263,18 @@ useEffect(() => {
               {msg.time}
               {renderMessageStatus(msg)}
             </span>
+            {msg.sender === 'user' && msg.senderName && (
+              <span style={{
+                display: 'block',
+                fontSize: '10px',
+                color: 'rgba(139, 92, 246, 0.7)',
+                marginTop: '2px',
+                textAlign: 'left',
+                fontWeight: '600'
+              }}>
+                {msg.senderName}
+              </span>
+            )}
           </div>
         ))}
         <div ref={messagesEndRef} />
@@ -1214,6 +1285,8 @@ useEffect(() => {
         <div 
           className="message-menu-glass"
           style={{ top: `${menuPosition.y}px` }}
+          onMouseDown={(e) => e.stopPropagation()}
+          onTouchStart={(e) => e.stopPropagation()}
           onClick={(e) => e.stopPropagation()}
         >
           <button className="menu-item-btn" onClick={() => handleReply(selectedMessage)}>
