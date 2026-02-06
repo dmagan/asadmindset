@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   ArrowLeft, 
   Search, 
@@ -6,7 +6,8 @@ import {
   Clock,
   CheckCircle,
   User,
-  Loader2
+  Loader2,
+  MailOpen
 } from 'lucide-react';
 import { authService } from '../services/authService';
 
@@ -16,12 +17,17 @@ const AdminConversations = ({ onBack, onSelectConversation }) => {
   const [conversations, setConversations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  
+  // Swipe state
+  const [swipedId, setSwipedId] = useState(null);
+  const touchStartX = useRef(0);
+  const touchCurrentX = useRef(0);
+  const swipeThreshold = 70;
 
-useEffect(() => {
-  fetchConversations();
-}, []);
+  useEffect(() => {
+    fetchConversations();
+  }, []);
 
-  // Fix iOS scroll
   useEffect(() => {
     const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
     if (isMobile) {
@@ -43,12 +49,8 @@ useEffect(() => {
     try {
       const token = authService.getToken();
       const response = await fetch(`${API_URL}/admin/conversations`, {
-
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
+        headers: { 'Authorization': `Bearer ${token}` }
       });
-      
       if (!response.ok) throw new Error('Failed to fetch');
       const data = await response.json();
       setConversations(data);
@@ -59,6 +61,96 @@ useEffect(() => {
     }
   };
 
+  const markAsUnread = async (convId) => {
+    try {
+      const token = authService.getToken();
+      await fetch(`${API_URL}/admin/conversations/${convId}/unread`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      setConversations(prev => prev.map(c => 
+        c.id === convId ? { ...c, unreadCount: Math.max(c.unreadCount || 0, 1) } : c
+      ));
+      setSwipedId(null);
+      // ریست swipe
+      document.querySelectorAll('.conv-swipe-content').forEach(el => {
+        el.style.transform = 'translateX(0)';
+        el.style.transition = 'transform 0.2s ease';
+      });
+      document.querySelectorAll('.admin-conversation-item-wrapper').forEach(el => {
+        el.classList.remove('swiping');
+      });
+    } catch (error) {
+      console.error('Error marking as unread:', error);
+    }
+  };
+
+  // Swipe handlers
+  const handleTouchStart = (e, convId) => {
+    touchStartX.current = e.touches[0].clientX;
+    touchCurrentX.current = e.touches[0].clientX;
+  };
+
+  const handleTouchMove = (e, convId) => {
+    touchCurrentX.current = e.touches[0].clientX;
+    const diff = touchStartX.current - touchCurrentX.current;
+    const wrapper = e.currentTarget;
+    const el = wrapper.querySelector('.conv-swipe-content');
+    if (diff > 10) {
+      wrapper.classList.add('swiping');
+    }
+    if (el && diff > 0) {
+      el.style.transform = `translateX(-${Math.min(diff, 90)}px)`;
+      el.style.transition = 'none';
+    } else if (el && diff <= 0) {
+      el.style.transform = 'translateX(0)';
+      el.style.transition = 'none';
+    }
+  };
+
+  const handleTouchEnd = (e, convId) => {
+    const diff = touchStartX.current - touchCurrentX.current;
+    const wrapper = e.currentTarget;
+    const el = wrapper.querySelector('.conv-swipe-content');
+    
+    if (diff > swipeThreshold) {
+      if (el) {
+        el.style.transform = 'translateX(-80px)';
+        el.style.transition = 'transform 0.2s ease';
+      }
+      setSwipedId(convId);
+    } else {
+      if (el) {
+        el.style.transform = 'translateX(0)';
+        el.style.transition = 'transform 0.2s ease';
+      }
+      wrapper.classList.remove('swiping');
+      if (swipedId === convId) setSwipedId(null);
+    }
+  };
+
+  // Close swipe on outside tap
+  useEffect(() => {
+    const handleOutside = (e) => {
+      if (swipedId && !e.target.closest('.conv-swipe-action')) {
+        setSwipedId(null);
+        document.querySelectorAll('.conv-swipe-content').forEach(el => {
+          el.style.transform = 'translateX(0)';
+          el.style.transition = 'transform 0.2s ease';
+        });
+        document.querySelectorAll('.admin-conversation-item-wrapper').forEach(el => {
+          el.classList.remove('swiping');
+        });
+      }
+    };
+    document.addEventListener('touchstart', handleOutside);
+    document.addEventListener('mousedown', handleOutside);
+    return () => {
+      document.removeEventListener('touchstart', handleOutside);
+      document.removeEventListener('mousedown', handleOutside);
+    };
+  }, [swipedId]);
+
   const filteredConversations = conversations.filter(conv => {
     if (!searchQuery) return true;
     return conv.userName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -67,26 +159,20 @@ useEffect(() => {
 
   const getStatusIcon = (status) => {
     switch (status) {
-      case 'open':
-        return <Clock size={14} className="status-icon-open" />;
-      case 'closed':
-        return <CheckCircle size={14} className="status-icon-closed" />;
-      default:
-        return null;
+      case 'open': return <Clock size={14} className="status-icon-open" />;
+      case 'closed': return <CheckCircle size={14} className="status-icon-closed" />;
+      default: return null;
     }
   };
 
   const formatTime = (dateString) => {
     if (!dateString) return '';
-    
     const date = new Date(dateString);
     const now = new Date();
     const diff = now - date;
-    
     if (diff < 60000) return 'الان';
     if (diff < 3600000) return `${Math.floor(diff / 60000)} دقیقه`;
     if (diff < 86400000) return `${Math.floor(diff / 3600000)} ساعت`;
-    
     return date.toLocaleDateString('en-US');
   };
 
@@ -108,7 +194,7 @@ useEffect(() => {
         </div>
       </div>
 
-      {/* Search & Filters */}
+      {/* Search */}
       <div className="admin-filters-container">
         <div className="admin-search-box">
           <Search size={18} />
@@ -119,8 +205,6 @@ useEffect(() => {
             onChange={(e) => setSearchQuery(e.target.value)}
           />
         </div>
-        
-     
       </div>
 
       {/* Conversations List */}
@@ -140,25 +224,55 @@ useEffect(() => {
           filteredConversations.map((conv) => (
             <div 
               key={conv.id}
-              className={`admin-conversation-item ${conv.unreadCount > 0 ? 'has-unread' : ''}`}
-              onClick={() => onSelectConversation(conv.id)}
+              className="admin-conversation-item-wrapper"
+              onTouchStart={(e) => handleTouchStart(e, conv.id)}
+              onTouchMove={(e) => handleTouchMove(e, conv.id)}
+              onTouchEnd={(e) => handleTouchEnd(e, conv.id)}
             >
-              <div className="conv-avatar">
-                <User size={24} />
+              {/* Swipe action behind */}
+              <div className="conv-swipe-action" 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  markAsUnread(conv.id);
+                }}
+                onTouchEnd={(e) => {
+                  e.stopPropagation();
+                  e.preventDefault();
+                  markAsUnread(conv.id);
+                }}
+              >
+                <MailOpen size={20} />
+                <span>Unread</span>
               </div>
               
-              <div className="conv-content">
-                <div className="conv-header">
-                  <span className="conv-name">{conv.userName || 'کاربر'}</span>
-                  <span className="conv-time">{formatTime(conv.lastMessageAt)}</span>
+              {/* Main content */}
+              <div 
+                className={`conv-swipe-content ${conv.unreadCount > 0 ? 'has-unread' : ''}`}
+                onClick={(e) => {
+                  if (swipedId === conv.id) {
+                    e.stopPropagation();
+                    return;
+                  }
+                  onSelectConversation(conv.id);
+                }}
+              >
+                <div className="conv-avatar">
+                  <User size={24} />
                 </div>
-                <div className="conv-preview">
-                  <p className="conv-message">{conv.lastMessage || 'بدون پیام'}</p>
-                  <div className="conv-meta">
-                    {conv.unreadCount > 0 && (
-                      <span className="conv-unread-badge">{conv.unreadCount}</span>
-                    )}
-                    {getStatusIcon(conv.status)}
+                
+                <div className="conv-content">
+                  <div className="conv-header">
+                    <span className="conv-name">{conv.userName || 'کاربر'}</span>
+                    <span className="conv-time">{formatTime(conv.lastMessageAt)}</span>
+                  </div>
+                  <div className="conv-preview">
+                    <p className="conv-message">{conv.lastMessage || 'بدون پیام'}</p>
+                    <div className="conv-meta">
+                      {conv.unreadCount > 0 && (
+                        <span className="conv-unread-badge">{conv.unreadCount}</span>
+                      )}
+                      {getStatusIcon(conv.status)}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -205,8 +319,6 @@ useEffect(() => {
         .admin-search-box input::placeholder {
           color: rgba(255, 255, 255, 0.4);
         }
-        
-        
         
         .admin-conversations-list {
           flex: 1;
@@ -260,21 +372,65 @@ useEffect(() => {
           margin: 0;
         }
         
-        .admin-conversation-item {
+        /* Swipe container */
+        .admin-conversation-item-wrapper {
+          position: relative;
+          overflow: hidden;
+          border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        
+        /* Swipe action (behind) - hidden by default */
+        .conv-swipe-action {
+          position: absolute;
+          top: 0;
+          right: 0;
+          width: 80px;
+          height: 100%;
+          background: linear-gradient(135deg, #6366f1, #8b5cf6);
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          gap: 4px;
+          color: white;
+          font-size: 11px;
+          font-weight: 600;
+          cursor: pointer;
+          z-index: 1;
+          opacity: 0;
+          transition: opacity 0.15s ease;
+          pointer-events: none;
+        }
+        
+        .admin-conversation-item-wrapper.swiping .conv-swipe-action {
+          opacity: 1;
+          pointer-events: auto;
+        }
+        
+        .conv-swipe-action:active {
+          background: linear-gradient(135deg, #4f46e5, #7c3aed);
+        }
+        
+        /* Main content (slides) */
+        .conv-swipe-content {
+          position: relative;
           display: flex;
           align-items: center;
           gap: 14px;
           padding: 16px;
-          border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+          background: rgb(15 15 25 / 40%);
+          backdrop-filter: blur(20px);
+          -webkit-backdrop-filter: blur(20px);
           cursor: pointer;
-          transition: all 0.2s;
+          z-index: 2;
+          will-change: transform;
         }
         
-        .admin-conversation-item:active {
-          background: rgba(255, 255, 255, 0.08);
+        .conv-swipe-content:active {
+          background: rgba(255, 255, 255, 0.06);
         }
         
-        .admin-conversation-item.has-unread {
+        .conv-swipe-content.has-unread {
           background: rgba(99, 102, 241, 0.08);
         }
         

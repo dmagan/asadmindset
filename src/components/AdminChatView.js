@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, ArrowLeft, Headphones, Trash2, Edit3, X, Paperclip, Mic, Square, Play, Pause, Check, CheckCheck, Reply, CornerDownLeft, ArrowDown, Video, Image, Loader2, ChevronLeft, User } from 'lucide-react';
+import { Send, ArrowLeft, Headphones, Trash2, Edit3, X, Paperclip, Mic, Square, Play, Pause, Check, CheckCheck, Reply, CornerDownLeft, ArrowDown, Video, Image, Loader2, ChevronLeft, User, MailOpen } from 'lucide-react';
 import Pusher from 'pusher-js';
 import { authService } from '../services/authService';
 import ImageZoomModal from './ImageZoomModal';
@@ -147,6 +147,20 @@ useEffect(() => {
       });
     } catch (error) {
       console.error('Error marking messages as read:', error);
+    }
+  };
+
+  const markAsUnread = async () => {
+    try {
+      const token = authService.getToken();
+      await fetch(`${API_URL}/admin/conversations/${conversationId}/unread`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      // برگرد به لیست مکالمات
+      onBack();
+    } catch (error) {
+      console.error('Error marking as unread:', error);
     }
   };
 
@@ -1083,6 +1097,25 @@ useEffect(() => {
               <span className="chat-header-title">{conversation?.userName || 'کاربر'}</span>
 <span className="chat-header-status">{conversation?.userEmail || ''}</span>
             </div>
+            <button 
+              onClick={markAsUnread}
+              title="علامت به عنوان خوانده نشده"
+              style={{
+                background: 'rgba(99, 102, 241, 0.15)',
+                border: '1px solid rgba(99, 102, 241, 0.3)',
+                borderRadius: '10px',
+                padding: '8px',
+                color: '#a5b4fc',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginLeft: '8px',
+                transition: 'all 0.2s'
+              }}
+            >
+              <MailOpen size={18} />
+            </button>
             <div className="chat-avatar-glass">
                             <User size={20} />
             </div>

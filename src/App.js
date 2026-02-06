@@ -203,9 +203,13 @@ const CutifyGlassDemo = () => {
         // وقتی یکی از تیم پیام‌ها رو خوند، بادج همه آپدیت بشه
         channelRef.current.bind('messages-read', (data) => {
           if (data.readBy === 'admin') {
-            // مستقیم از سرور تعداد واقعی رو بگیر
             fetchUnreadCount();
           }
+        });
+        
+        // وقتی یکی از تیم مکالمه رو unread کرد، بادج همه آپدیت بشه
+        channelRef.current.bind('conversation-unread', (data) => {
+          fetchUnreadCount();
         });
       }
       
@@ -268,15 +272,13 @@ const CutifyGlassDemo = () => {
     };
   }, [isLoggedIn, canManageSupport, canManageSubscriptions]);
 
-  // وقتی کاربر وارد صفحه پشتیبانی میشه، unread رو صفر کن
-  // (mark as read سمت سرور توسط SupportChat انجام میشه)
+  // وقتی کاربر عادی وارد صفحه پشتیبانی میشه، unread رو صفر کن
+  // برای ادمین/ساب‌ادمین صفر نکن چون فقط لیست مکالمات باز میشه
   useEffect(() => {
-    if (activeTab === 'support' || activeTab === 'adminChat') {
+    if (activeTab === 'support' && !canManageSupport) {
       setUnreadCount(0);
     }
-    // وقتی ادمین/ساب‌ادمین وارد صفحه اشتراک‌ها میشه، بادج رو آپدیت کن
     if (activeTab === 'shop' && canManageSubscriptions) {
-      // pending count از خود AdminSubscriptionManager آپدیت میشه via onPendingCountChange
     }
   }, [activeTab]);
 
