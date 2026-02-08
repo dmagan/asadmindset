@@ -59,6 +59,11 @@ const CutifyGlassDemo = () => {
     
     window.addEventListener('imageZoomOpen', handleZoomOpen);
     window.addEventListener('imageZoomClose', handleZoomClose);
+
+    // Hide splash loader when app is ready
+    if (window.hideSplashLoader) {
+      window.hideSplashLoader();
+    }
     
     return () => {
       window.removeEventListener('imageZoomOpen', handleZoomOpen);

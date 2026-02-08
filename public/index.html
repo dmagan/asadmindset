@@ -10,9 +10,53 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="mobile-web-app-capable" content="yes">
     <link rel="apple-touch-icon" href="/icon-192.png">
+    <style>
+      body { margin: 0; padding: 0; background: #0a0a0a; }
+      #splash-loader {
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background: #0a0a0a; display: flex; flex-direction: column;
+        align-items: center; justify-content: center; z-index: 99999;
+        transition: opacity 0.4s ease, visibility 0.4s ease;
+      }
+      #splash-loader.hidden { opacity: 0; visibility: hidden; }
+      .sl-wrap { position: relative; width: 50px; height: 70px; }
+      .sl-box {
+        width: 50px; height: 50px; background: #fbbf24;
+        animation: slAnimate .5s linear infinite; position: absolute;
+        top: 0; left: 0; border-radius: 3px;
+      }
+      .sl-shadow {
+        width: 50px; height: 5px; background: #fff; opacity: .08;
+        position: absolute; top: 59px; left: 0; border-radius: 50%;
+        animation: slShadow .5s linear infinite;
+      }
+      .sl-text {
+        margin-top: 30px; color: rgba(255,255,255,0.5); font-size: 14px;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        letter-spacing: 1px;
+      }
+      @keyframes slAnimate {
+        17% { border-bottom-right-radius: 3px; }
+        25% { transform: translateY(9px) rotate(22.5deg); }
+        50% { transform: translateY(18px) scale(1,.9) rotate(45deg); border-bottom-right-radius: 40px; }
+        75% { transform: translateY(9px) rotate(67.5deg); }
+        100% { transform: translateY(0) rotate(90deg); }
+      }
+      @keyframes slShadow { 50% { transform: scale(1.2,1); } }
+    </style>
   </head>
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>
+    <div id="splash-loader">
+      <div class="sl-wrap"><div class="sl-box"></div><div class="sl-shadow"></div></div>
+      <div class="sl-text"><span style="color:rgba(255,255,255,0.5)">Asad</span><span style="color:#fbbf24">Mindset</span></div>
+    </div>
     <div id="root"></div>
+    <script>
+      window.hideSplashLoader = function() {
+        var s = document.getElementById('splash-loader');
+        if (s) { s.classList.add('hidden'); setTimeout(function() { s.remove(); }, 500); }
+      };
+    </script>
   </body>
-</html> 
+</html>

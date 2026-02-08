@@ -143,9 +143,11 @@ const AdminUsersManager = ({ onBack }) => {
 
   const getSubStatusInfo = (status) => {
     switch (status) {
-      case 'active': return { label: 'فعال', color: '#34d399', bg: 'rgba(52,211,153,0.15)' };
+      case 'active':
+      case 'approved': return { label: 'فعال', color: '#34d399', bg: 'rgba(52,211,153,0.15)' };
       case 'pending': return { label: 'در انتظار', color: '#fbbf24', bg: 'rgba(251,191,36,0.15)' };
       case 'expired': return { label: 'منقضی', color: '#f87171', bg: 'rgba(248,113,113,0.15)' };
+      case 'rejected': return { label: 'رد شده', color: '#f87171', bg: 'rgba(248,113,113,0.15)' };
       default: return { label: status || '—', color: 'rgba(255,255,255,0.5)', bg: 'rgba(255,255,255,0.05)' };
     }
   };
@@ -169,8 +171,9 @@ const AdminUsersManager = ({ onBack }) => {
     const monthUsers = usersWithDate.filter(u => u.regDate >= monthAgo);
     const threeMonthUsers = usersWithDate.filter(u => u.regDate >= threeMonthsAgo);
 
-    const activeSubUsers = allUsers.filter(u => u.subscription && u.subscription.status === 'active');
+    const activeSubUsers = allUsers.filter(u => u.subscription && (u.subscription.status === 'active' || u.subscription.status === 'approved'));
     const expiredSubUsers = allUsers.filter(u => u.subscription && u.subscription.status === 'expired');
+    const pendingSubUsers = allUsers.filter(u => u.subscription && u.subscription.status === 'pending');
     const noSubUsers = allUsers.filter(u => !u.subscription);
 
     // Daily registrations for last 14 days (for chart)
@@ -685,7 +688,7 @@ const AdminUsersManager = ({ onBack }) => {
                       }}>
                         {u.displayName || u.username}
                       </span>
-                      {hasSub && u.subscription.status === 'active' && (
+                      {hasSub && (u.subscription.status === 'active' || u.subscription.status === 'approved') && (
                         <Crown size={13} style={{ color: '#fbbf24', flexShrink: 0 }} />
                       )}
                     </div>

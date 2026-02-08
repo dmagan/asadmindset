@@ -2,6 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import './i18n'; // Import i18n config
 import App from './App';
+import * as serviceWorkerRegistration from './serviceWorkerRegistration';
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
@@ -10,7 +11,4 @@ root.render(
   </React.StrictMode>
 );
 
-
-//import * as serviceWorkerRegistration from './serviceWorkerRegistration';
-
-//serviceWorkerRegistration.unregister();
+serviceWorkerRegistration.register();
