@@ -19,6 +19,7 @@ import MyPurchases from './components/MyPurchases';
 import AdminSubscriptionManager from './components/AdminSubscriptionManager';
 import AdminDiscountManager from './components/AdminDiscountManager';
 import SubAdminManager from './components/SubAdminManager';
+import AdminUsersManager from './components/AdminUsersManager';
 import { authService } from './services/authService';
 import Pusher from 'pusher-js';
 
@@ -496,6 +497,7 @@ const CutifyGlassDemo = () => {
           <ProfileCard 
             onNavigateToSubscription={() => setActiveTab('subscription')} 
             onNavigateToSubAdmin={() => setActiveTab('subAdminManager')}
+            onNavigateToUsers={() => setActiveTab('adminUsers')}
           />
         </div>
       );
@@ -564,6 +566,15 @@ if (activeTab === 'projects') {
     if (activeTab === 'subAdminManager') {
       return (
         <SubAdminManager 
+          onBack={() => setActiveTab('profile')} 
+        />
+      );
+    }
+
+    // صفحه لیست کاربران (فقط ادمین اصلی)
+    if (activeTab === 'adminUsers') {
+      return (
+        <AdminUsersManager 
           onBack={() => setActiveTab('profile')} 
         />
       );
@@ -745,13 +756,13 @@ if (activeTab === 'projects') {
         <div className="bg-overlay"></div>
         
         {/* لایه شیشه‌ای روی بک‌گراند - در صفحه پشتیبانی و خریدها */}
-        {(activeTab === 'support' || activeTab === 'adminChat' || activeTab === 'shop' || activeTab === 'adminDiscounts' || activeTab === 'subAdminManager') && <div className="bg-glass-overlay"></div>}
+        {(activeTab === 'support' || activeTab === 'adminChat' || activeTab === 'shop' || activeTab === 'adminDiscounts' || activeTab === 'subAdminManager' || activeTab === 'adminUsers') && <div className="bg-glass-overlay"></div>}
 
         {/* Content */}
         {renderContent()}
 
         {/* Bottom Navigation - مخفی در صفحه‌های تمام‌صفحه */}
-        {activeTab !== 'support' && activeTab !== 'alphaChannel' && activeTab !== 'adminChat' && activeTab !== 'subAdminManager' && (
+        {activeTab !== 'support' && activeTab !== 'alphaChannel' && activeTab !== 'adminChat' && activeTab !== 'subAdminManager' && activeTab !== 'adminUsers' && (
           <div className="bottom-nav-glass">
             <div className="nav-items">
               <button 

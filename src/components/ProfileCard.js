@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
 import { 
   User, 
+  Users,
   LogOut, 
   ChevronRight, 
   ChevronLeft,
@@ -15,7 +16,7 @@ import {
   Shield
 } from 'lucide-react';
 
-const ProfileCard = ({ onNavigateToSubscription, onNavigateToSubAdmin }) => {
+const ProfileCard = ({ onNavigateToSubscription, onNavigateToSubAdmin, onNavigateToUsers }) => {
   const { t, i18n } = useTranslation();
   const { user, logout, updateProfile, changePassword } = useAuth();
 
@@ -108,6 +109,18 @@ const ProfileCard = ({ onNavigateToSubscription, onNavigateToSubAdmin }) => {
                 <Shield size={20} />
               </div>
               <span className="menu-label">مدیریت کاربران ارشد</span>
+            </div>
+            <ChevronRight size={20} className="menu-arrow" />
+          </button>
+        )}
+
+        {isAdmin && (
+          <button className="profile-menu-item users-item" onClick={onNavigateToUsers}>
+            <div className="menu-item-left">
+              <div className="menu-icon users-icon">
+                <Users size={20} />
+              </div>
+              <span className="menu-label">کاربران</span>
             </div>
             <ChevronRight size={20} className="menu-arrow" />
           </button>
@@ -531,6 +544,21 @@ const ProfileCard = ({ onNavigateToSubscription, onNavigateToSubAdmin }) => {
         .profile-menu-item.subadmin-item:hover {
           background: linear-gradient(135deg, rgba(139, 92, 246, 0.15) 0%, rgba(99, 102, 241, 0.1) 100%);
           border-color: rgba(139, 92, 246, 0.3);
+        }
+
+        .menu-icon.users-icon {
+          background: linear-gradient(135deg, rgba(16, 185, 129, 0.2) 0%, rgba(5, 150, 105, 0.15) 100%);
+          color: #34d399;
+        }
+
+        .profile-menu-item.users-item {
+          background: linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, rgba(5, 150, 105, 0.05) 100%);
+          border-color: rgba(16, 185, 129, 0.2);
+        }
+
+        .profile-menu-item.users-item:hover {
+          background: linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, rgba(5, 150, 105, 0.1) 100%);
+          border-color: rgba(16, 185, 129, 0.3);
         }
 
         .menu-label {
