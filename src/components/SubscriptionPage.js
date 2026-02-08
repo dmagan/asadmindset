@@ -24,8 +24,8 @@ const PRICE_PER_MONTH = 25;
 // آدرس کیف پول برای هر شبکه
 const WALLET_ADDRESSES = {
   TRC20: 'TRJ8KcHydFr3UDytiYmXiBPc1d4df5zGf6',
-  Ethereum: '--------------xxxxxxxx---------------.',
-  Solana: '-------------Test----------------'
+  Ethereum: 'f0c232e8b0424a1c832102ce2a206c9fbfdf62e',
+  Solana: 'H8Ms4Ls4FxFiSpDsNwALxsDQtoboH4TvYJ5NPLDkWvyN'
 };
 
 const SubscriptionPage = ({ onBack, onNavigateToSupport, isRenewal = false, renewedFrom = null }) => {

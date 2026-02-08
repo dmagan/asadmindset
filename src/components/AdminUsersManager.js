@@ -354,7 +354,7 @@ const AdminUsersManager = ({ onBack }) => {
           <div style={{ display: 'flex', gap: '8px' }}>
             <SubStatBadge label="فعال" count={stats.activeSub} color="#34d399" />
             <SubStatBadge label="منقضی" count={stats.expiredSub} color="#f87171" />
-            <SubStatBadge label="بدون اشتراک" count={stats.noSub} color="rgba(255,255,255,0.4)" />
+            <SubStatBadge label="بدون اشتراک" count={stats.noSub} color="#94a3b8" />
           </div>
           {/* Subscription rate bar */}
           <div style={{ marginTop: '12px' }}>
@@ -850,11 +850,11 @@ const StatCard = ({ icon, value, label, color }) => (
 const SubStatBadge = ({ label, count, color }) => (
   <div style={{
     flex: 1, padding: '10px 8px', borderRadius: '10px',
-    background: `${color}10`, border: `1px solid ${color}25`,
+    background: `${color}15`, border: `1px solid ${color}30`,
     display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px'
   }}>
     <span style={{ fontSize: '16px', fontWeight: '700', color }}>{count}</span>
-    <span style={{ fontSize: '10px', color: `${color}cc`, whiteSpace: 'nowrap' }}>{label}</span>
+    <span style={{ fontSize: '10px', color, opacity: 0.85, whiteSpace: 'nowrap' }}>{label}</span>
   </div>
 );
 
