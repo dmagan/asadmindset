@@ -20,6 +20,8 @@ import AdminSubscriptionManager from './components/AdminSubscriptionManager';
 import AdminDiscountManager from './components/AdminDiscountManager';
 import SubAdminManager from './components/SubAdminManager';
 import AdminUsersManager from './components/AdminUsersManager';
+import TeamConversations from './components/TeamConversations';
+import TeamChatView from './components/TeamChatView';
 import { authService } from './services/authService';
 import Pusher from 'pusher-js';
 
@@ -102,8 +104,14 @@ const CutifyGlassDemo = () => {
   // State برای ذخیره conversation انتخاب شده توسط ادمین
   const [selectedConversationId, setSelectedConversationId] = useState(null);
   
+  // State برای ذخیره team conversation انتخاب شده
+  const [selectedTeamConversationId, setSelectedTeamConversationId] = useState(null);
+  
   // State برای تعداد پیام‌های خوانده نشده
   const [unreadCount, setUnreadCount] = useState(0);
+  
+  // State برای تعداد پیام‌های خوانده نشده تیمی
+  const [teamUnreadCount, setTeamUnreadCount] = useState(0);
   
   // State برای تعداد پست‌های خوانده نشده کانال آلفا
   const [alphaUnreadCount, setAlphaUnreadCount] = useState(0);
@@ -114,8 +122,21 @@ const CutifyGlassDemo = () => {
   // Ref برای Pusher
   const pusherRef = useRef(null);
   const channelRef = useRef(null);
+  const teamChannelRef = useRef(null);
   const alphaChannelRef = useRef(null);
   const activeTabRef = useRef(activeTab);
+  
+  // Extract user ID from JWT token
+  const getUserIdFromToken = () => {
+    try {
+      const token = authService.getToken();
+      if (!token) return null;
+      const parts = token.split('.');
+      if (parts.length !== 3) return null;
+      const payload = JSON.parse(atob(parts[1]));
+      return parseInt(payload?.data?.user?.id);
+    } catch (e) { return null; }
+  };
 
   const { user, isLoggedIn, loading, hasPermission } = useAuth();
   
@@ -215,6 +236,22 @@ const CutifyGlassDemo = () => {
     }
   };
 
+  // دریافت تعداد پیام‌های خوانده نشده تیمی
+  const fetchTeamUnreadCount = async () => {
+    if (!isLoggedIn) { setTeamUnreadCount(0); return; }
+    // فقط ادمین و ساب‌ادمین‌ها چت تیمی دارن
+    try {
+      const token = authService.getToken();
+      const res = await fetch(`${API_URL}/team/conversations`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setTeamUnreadCount(data.reduce((sum, c) => sum + (c.unreadCount || 0), 0));
+      }
+    } catch (e) {}
+  };
+
   // اتصال به Pusher برای دریافت پیام‌های جدید
   const connectPusher = async () => {
     if (!isLoggedIn || pusherRef.current) return;
@@ -289,6 +326,18 @@ const CutifyGlassDemo = () => {
         setAlphaUnreadCount(prev => prev + 1);
       }
     });
+    
+    // Subscribe to team channel for badge (admin + sub-admins)
+    const myUserId = getUserIdFromToken();
+    if (myUserId) {
+      teamChannelRef.current = pusherRef.current.subscribe(`team-user-${myUserId}`);
+      teamChannelRef.current.bind('new-team-message', (data) => {
+        // فقط وقتی در صفحه چت تیمی نیست بادج رو بالا ببر
+        if (activeTabRef.current !== 'teamChat' && activeTabRef.current !== 'teamChatView') {
+          setTeamUnreadCount(prev => prev + 1);
+        }
+      });
+    }
   };
 
   // قطع اتصال Pusher
@@ -296,6 +345,10 @@ const CutifyGlassDemo = () => {
     if (channelRef.current) {
       channelRef.current.unbind_all();
       channelRef.current = null;
+    }
+    if (teamChannelRef.current) {
+      teamChannelRef.current.unbind_all();
+      teamChannelRef.current = null;
     }
     if (alphaChannelRef.current) {
       alphaChannelRef.current.unbind_all();
@@ -313,11 +366,13 @@ const CutifyGlassDemo = () => {
       fetchUnreadCount();
       fetchPendingSubCount();
       fetchAlphaUnreadCount();
+      fetchTeamUnreadCount();
       connectPusher();
     } else {
       setUnreadCount(0);
       setPendingSubCount(0);
       setAlphaUnreadCount(0);
+      setTeamUnreadCount(0);
       disconnectPusher();
     }
     
@@ -331,6 +386,10 @@ const CutifyGlassDemo = () => {
   useEffect(() => {
     if (activeTab === 'support' && !canManageSupport) {
       setUnreadCount(0);
+    }
+    // وقتی وارد چت تیمی می‌شه بادج صفر بشه
+    if (activeTab === 'teamChat' || activeTab === 'teamChatView') {
+      setTeamUnreadCount(0);
     }
     if (activeTab === 'shop' && canManageSubscriptions) {
     }
@@ -528,6 +587,7 @@ if (activeTab === 'projects') {
               setSelectedConversationId(convId);
               setActiveTab('adminChat');
             }}
+            onTeamChat={() => setActiveTab('teamChat')}
           />
         );
       }
@@ -550,6 +610,32 @@ if (activeTab === 'projects') {
             setSelectedConversationId(null);
             setActiveTab('support');
           }} 
+        />
+      );
+    }
+    
+    // صفحه لیست چت تیمی
+    if (activeTab === 'teamChat') {
+      return (
+        <TeamConversations
+          onBack={() => setActiveTab('support')}
+          onSelectConversation={(convId) => {
+            setSelectedTeamConversationId(convId);
+            setActiveTab('teamChatView');
+          }}
+        />
+      );
+    }
+    
+    // صفحه چت تیمی با یک مکالمه خاص
+    if (activeTab === 'teamChatView') {
+      return (
+        <TeamChatView
+          conversationId={selectedTeamConversationId}
+          onBack={() => {
+            setSelectedTeamConversationId(null);
+            setActiveTab('teamChat');
+          }}
         />
       );
     }
@@ -761,13 +847,13 @@ if (activeTab === 'projects') {
         <div className="bg-overlay"></div>
         
         {/* لایه شیشه‌ای روی بک‌گراند - در صفحه پشتیبانی و خریدها */}
-        {(activeTab === 'support' || activeTab === 'adminChat' || activeTab === 'shop' || activeTab === 'adminDiscounts' || activeTab === 'subAdminManager' || activeTab === 'adminUsers') && <div className="bg-glass-overlay"></div>}
+        {(activeTab === 'support' || activeTab === 'adminChat' || activeTab === 'shop' || activeTab === 'adminDiscounts' || activeTab === 'subAdminManager' || activeTab === 'adminUsers' || activeTab === 'teamChat' || activeTab === 'teamChatView') && <div className="bg-glass-overlay"></div>}
 
         {/* Content */}
         {renderContent()}
 
         {/* Bottom Navigation - مخفی در صفحه‌های تمام‌صفحه */}
-        {activeTab !== 'support' && activeTab !== 'alphaChannel' && activeTab !== 'adminChat' && activeTab !== 'subAdminManager' && activeTab !== 'adminUsers' && (
+        {activeTab !== 'support' && activeTab !== 'alphaChannel' && activeTab !== 'adminChat' && activeTab !== 'subAdminManager' && activeTab !== 'adminUsers' && activeTab !== 'teamChat' && activeTab !== 'teamChatView' && (
           <div className="bottom-nav-glass">
             <div className="nav-items">
               <button 
@@ -785,6 +871,9 @@ if (activeTab === 'projects') {
                   <Headphones size={22} strokeWidth={activeTab === 'support' ? 2.5 : 1.5} />
                   {unreadCount > 0 && (
                     <span className="nav-badge">{unreadCount > 99 ? '99+' : unreadCount}</span>
+                  )}
+                  {teamUnreadCount > 0 && (
+                    <span className="nav-badge nav-badge-team">{teamUnreadCount > 99 ? '99+' : teamUnreadCount}</span>
                   )}
                 </div>
                 <span>Support</span>

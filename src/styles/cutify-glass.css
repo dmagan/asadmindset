@@ -2339,6 +2339,13 @@ background: rgba(255, 255, 255, 0.067);
   animation: badgePulse 2s ease-in-out infinite;
 }
 
+.nav-badge-team {
+  right: auto;
+  left: -20px;
+  background: linear-gradient(135deg, #10b981, #059669);
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.4);
+}
+
 @keyframes badgePulse {
   0%, 100% {
     transform: scale(1);

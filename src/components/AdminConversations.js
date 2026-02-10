@@ -6,6 +6,7 @@ import {
   Clock,
   CheckCircle,
   User,
+  Users,
   Loader2,
   MailOpen
 } from 'lucide-react';
@@ -13,10 +14,11 @@ import { authService } from '../services/authService';
 
 const API_URL = 'https://asadmindset.com/wp-json/asadmindset/v1';
 
-const AdminConversations = ({ onBack, onSelectConversation }) => {
+const AdminConversations = ({ onBack, onSelectConversation, onTeamChat }) => {
   const [conversations, setConversations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [teamUnreadCount, setTeamUnreadCount] = useState(0);
   
   // Swipe state
   const [swipedId, setSwipedId] = useState(null);
@@ -26,6 +28,7 @@ const AdminConversations = ({ onBack, onSelectConversation }) => {
 
   useEffect(() => {
     fetchConversations();
+    if (onTeamChat) fetchTeamUnread();
   }, []);
 
   useEffect(() => {
@@ -59,6 +62,19 @@ const AdminConversations = ({ onBack, onSelectConversation }) => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const fetchTeamUnread = async () => {
+    try {
+      const token = authService.getToken();
+      const res = await fetch(`${API_URL}/team/conversations`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      const total = data.reduce((sum, c) => sum + (c.unreadCount || 0), 0);
+      setTeamUnreadCount(total);
+    } catch (e) {}
   };
 
   const markAsUnread = async (convId) => {
@@ -205,6 +221,15 @@ const AdminConversations = ({ onBack, onSelectConversation }) => {
             onChange={(e) => setSearchQuery(e.target.value)}
           />
         </div>
+        {onTeamChat && (
+          <button className="team-chat-nav-btn" onClick={onTeamChat}>
+            <Users size={18} />
+            <span>چت تیمی</span>
+            {teamUnreadCount > 0 && (
+              <span className="team-chat-badge">{teamUnreadCount}</span>
+            )}
+          </button>
+        )}
       </div>
 
       {/* Conversations List */}
@@ -318,6 +343,44 @@ const AdminConversations = ({ onBack, onSelectConversation }) => {
         
         .admin-search-box input::placeholder {
           color: rgba(255, 255, 255, 0.4);
+        }
+        
+        .team-chat-nav-btn {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          padding: 10px 16px;
+          background: rgba(16, 185, 129, 0.15);
+          border: 1px solid rgba(16, 185, 129, 0.3);
+          border-radius: 10px;
+          color: #6ee7b7;
+          font-size: 13px;
+          font-weight: 600;
+          font-family: inherit;
+          cursor: pointer;
+          transition: all 0.2s;
+          width: 100%;
+          position: relative;
+        }
+        
+        .team-chat-nav-btn:active {
+          background: rgba(16, 185, 129, 0.25);
+          transform: scale(0.98);
+        }
+        
+        .team-chat-badge {
+          min-width: 20px;
+          height: 20px;
+          padding: 0 6px;
+          background: linear-gradient(135deg, #ef4444, #dc2626);
+          border-radius: 10px;
+          font-size: 11px;
+          font-weight: 700;
+          color: #fff;
+          display: flex;
+          align-items: center;
+          justify-content: center;
         }
         
         .admin-conversations-list {
