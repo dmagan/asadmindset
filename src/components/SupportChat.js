@@ -3,6 +3,7 @@ import { Send, ArrowLeft, Headphones, Trash2, Edit3, X, Paperclip, Mic, Square, 
 import Pusher from 'pusher-js';
 import { authService } from '../services/authService';
 import ImageZoomModal from './ImageZoomModal';
+import usePresence from '../hooks/usePresence';
 
 const API_URL = 'https://asadmindset.com/wp-json/asadmindset/v1';
 const PUSHER_KEY = '71815fd9e2b90f89a57b';
@@ -14,6 +15,8 @@ const SupportChat = ({ onBack, onMessagesRead }) => {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [conversationId, setConversationId] = useState(null);
+  
+  usePresence('support', conversationId);
   
   // Check if current user is admin
   const currentUser = authService.getUser();

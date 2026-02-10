@@ -3,12 +3,14 @@ import { Send, ArrowLeft, Trash2, Edit3, X, Paperclip, Mic, Square, Play, Pause,
 import Pusher from 'pusher-js';
 import { authService } from '../services/authService';
 import ImageZoomModal from './ImageZoomModal';
+import usePresence from '../hooks/usePresence';
 
 const API_URL = 'https://asadmindset.com/wp-json/asadmindset/v1';
 const PUSHER_KEY = '71815fd9e2b90f89a57b';
 const PUSHER_CLUSTER = 'eu';
 
 const TeamChatView = ({ conversationId, onBack }) => {
+  usePresence('team', conversationId);
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(true);

@@ -387,6 +387,30 @@ const CutifyGlassDemo = () => {
     };
   }, [isLoggedIn, canManageSupport, canManageSubscriptions]);
 
+  // Deep link: handle push notification click (URL params)
+  useEffect(() => {
+    if (!isLoggedIn) return;
+    const params = new URLSearchParams(window.location.search);
+    const open = params.get('open');
+    const chatId = params.get('chatId');
+    
+    if (open === 'support' && chatId && canManageSupport) {
+      // Admin: open specific support conversation
+      setSelectedConversationId(parseInt(chatId));
+      setActiveTab('adminChat');
+      window.history.replaceState({}, '', '/');
+    } else if (open === 'support') {
+      // User: open support chat
+      setActiveTab('support');
+      window.history.replaceState({}, '', '/');
+    } else if (open === 'teamChat' && chatId) {
+      // Open specific team conversation
+      setSelectedTeamConversationId(parseInt(chatId));
+      setActiveTab('teamChatView');
+      window.history.replaceState({}, '', '/');
+    }
+  }, [isLoggedIn, canManageSupport]);
+
   // Push notification: show prompt after login if not registered
   useEffect(() => {
     if (isLoggedIn && pushService.isSupported() && !pushService.isRegistered()) {
