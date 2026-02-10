@@ -22,7 +22,9 @@ import SubAdminManager from './components/SubAdminManager';
 import AdminUsersManager from './components/AdminUsersManager';
 import TeamConversations from './components/TeamConversations';
 import TeamChatView from './components/TeamChatView';
+import PushPermission from './components/PushPermission';
 import { authService } from './services/authService';
+import { pushService } from './services/pushService';
 import Pusher from 'pusher-js';
 
 const API_URL = 'https://asadmindset.com/wp-json/asadmindset/v1';
@@ -112,6 +114,9 @@ const CutifyGlassDemo = () => {
   
   // State برای تعداد پیام‌های خوانده نشده تیمی
   const [teamUnreadCount, setTeamUnreadCount] = useState(0);
+  
+  // State برای نمایش prompt اعلان push
+  const [showPushPrompt, setShowPushPrompt] = useState(false);
   
   // State برای تعداد پست‌های خوانده نشده کانال آلفا
   const [alphaUnreadCount, setAlphaUnreadCount] = useState(0);
@@ -373,6 +378,7 @@ const CutifyGlassDemo = () => {
       setPendingSubCount(0);
       setAlphaUnreadCount(0);
       setTeamUnreadCount(0);
+      pushService.removeToken();
       disconnectPusher();
     }
     
@@ -380,6 +386,30 @@ const CutifyGlassDemo = () => {
       disconnectPusher();
     };
   }, [isLoggedIn, canManageSupport, canManageSubscriptions]);
+
+  // Push notification: show prompt after login if not registered
+  useEffect(() => {
+    if (isLoggedIn && pushService.isSupported() && !pushService.isRegistered()) {
+      // Show prompt after 3 seconds
+      const timer = setTimeout(() => {
+        if (pushService.getPermissionState() !== 'denied') {
+          setShowPushPrompt(true);
+        }
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [isLoggedIn]);
+
+  // Push notification: listen for foreground messages
+  useEffect(() => {
+    if (!isLoggedIn) return;
+    const unsubscribe = pushService.onForegroundMessage((payload) => {
+      // When app is in foreground, do nothing - Pusher handles real-time updates
+      // Notification only shows when app is in background (handled by SW)
+      console.log('Foreground push received (suppressed):', payload);
+    });
+    return () => { if (typeof unsubscribe === 'function') unsubscribe(); };
+  }, [isLoggedIn]);
 
   // وقتی کاربر عادی وارد صفحه پشتیبانی میشه، unread رو صفر کن
   // برای ادمین/ساب‌ادمین صفر نکن چون فقط لیست مکالمات باز میشه
@@ -851,6 +881,11 @@ if (activeTab === 'projects') {
 
         {/* Content */}
         {renderContent()}
+
+        {/* Push notification permission prompt */}
+        {showPushPrompt && (
+          <PushPermission onClose={() => setShowPushPrompt(false)} />
+        )}
 
         {/* Bottom Navigation - مخفی در صفحه‌های تمام‌صفحه */}
         {activeTab !== 'support' && activeTab !== 'alphaChannel' && activeTab !== 'adminChat' && activeTab !== 'subAdminManager' && activeTab !== 'adminUsers' && activeTab !== 'teamChat' && activeTab !== 'teamChatView' && (
