@@ -113,6 +113,18 @@ class AsadMindset_Push_Notifications {
                 return $user && user_can($user, 'manage_options');
             },
         ]);
+
+        // Broadcast push notification to user groups (admin only)
+        register_rest_route($ns, '/push/broadcast', [
+            'methods'  => 'POST',
+            'callback' => [$this, 'broadcast_push'],
+            'permission_callback' => function($r) {
+                $uid = $this->get_user_id_from_request($r);
+                if (!$uid) return false;
+                $user = get_user_by('id', $uid);
+                return $user && user_can($user, 'manage_options');
+            },
+        ]);
     }
 
     /**
@@ -335,7 +347,97 @@ class AsadMindset_Push_Notifications {
     }
 
     /**
-     * Send push notification to a specific user
+     * POST /push/broadcast - Send push notification to user groups
+     * Params: title, body, audience (all, subscribers, expired, non_subscribers, team)
+     */
+    public function broadcast_push($r) {
+        global $wpdb;
+        $params = $r->get_json_params();
+        $title = sanitize_text_field($params['title'] ?? 'AsadMindset');
+        $body = sanitize_text_field($params['body'] ?? '');
+        $audience = sanitize_text_field($params['audience'] ?? 'all');
+
+        if (!$body) {
+            return new WP_REST_Response(['message' => 'body required'], 400);
+        }
+
+        $table_subs = $wpdb->prefix . 'subscriptions';
+        $table_sa = $wpdb->prefix . 'sub_admins';
+        $user_ids = [];
+
+        switch ($audience) {
+            case 'subscribers':
+                // کاربرانی که اشتراک فعال دارند
+                $user_ids = $wpdb->get_col(
+                    "SELECT DISTINCT user_id FROM $table_subs WHERE status = 'approved' AND expires_at > NOW()"
+                );
+                break;
+
+            case 'expired':
+                // کاربرانی که اشتراک داشتند ولی تمدید نکردند (منقضی شده)
+                $active_users = $wpdb->get_col(
+                    "SELECT DISTINCT user_id FROM $table_subs WHERE status = 'approved' AND expires_at > NOW()"
+                );
+                $all_sub_users = $wpdb->get_col(
+                    "SELECT DISTINCT user_id FROM $table_subs WHERE status = 'approved'"
+                );
+                $user_ids = array_diff($all_sub_users, $active_users);
+                break;
+
+            case 'non_subscribers':
+                // کاربرانی که هیچوقت اشتراک نخریدند
+                $sub_users = $wpdb->get_col(
+                    "SELECT DISTINCT user_id FROM $table_subs WHERE status IN ('approved', 'pending')"
+                );
+                $all_users = get_users(['fields' => 'ID']);
+                $user_ids = array_diff($all_users, $sub_users);
+                break;
+
+            case 'team':
+                // اعضای تیم (ادمین + ساب‌ادمین)
+                $team_users = $wpdb->get_col(
+                    "SELECT DISTINCT user_id FROM $table_sa WHERE is_active = 1"
+                );
+                $admins = get_users(['role' => 'administrator', 'fields' => 'ID']);
+                $user_ids = array_unique(array_merge($team_users, $admins));
+                break;
+
+            case 'all':
+            default:
+                // همه کاربران
+                $user_ids = get_users(['fields' => 'ID']);
+                break;
+        }
+
+        $user_ids = array_map('intval', array_values(array_unique($user_ids)));
+        
+        $sent = 0;
+        $skipped = 0;
+        $failed = 0;
+
+        foreach ($user_ids as $uid) {
+            // For broadcast, skip preference checks - type is 'broadcast'
+            $result = $this->send_to_user($uid, $title, $body, ['type' => 'broadcast']);
+            if (isset($result['skipped']) && $result['skipped']) {
+                $skipped++;
+            } else if ($result['success']) {
+                $sent++;
+            } else {
+                $failed++;
+            }
+        }
+
+        return new WP_REST_Response([
+            'success' => true,
+            'total' => count($user_ids),
+            'sent' => $sent,
+            'skipped' => $skipped,
+            'failed' => $failed
+        ], 200);
+    }
+
+    /**
+     * POST /push/send - Send push to single user (admin only)
      */
     public function send_to_user($user_id, $title, $body, $data = []) {
         global $wpdb;

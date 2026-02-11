@@ -13,10 +13,11 @@ import {
   EyeOff,
   Globe,
   Crown,
-  Shield
+  Shield,
+  Bell
 } from 'lucide-react';
 
-const ProfileCard = ({ onNavigateToSubscription, onNavigateToSubAdmin, onNavigateToUsers }) => {
+const ProfileCard = ({ onNavigateToSubscription, onNavigateToSubAdmin, onNavigateToUsers, onNavigateToNotifications }) => {
   const { t, i18n } = useTranslation();
   const { user, logout, updateProfile, changePassword } = useAuth();
 
@@ -121,6 +122,18 @@ const ProfileCard = ({ onNavigateToSubscription, onNavigateToSubAdmin, onNavigat
                 <Users size={20} />
               </div>
               <span className="menu-label">کاربران</span>
+            </div>
+            <ChevronRight size={20} className="menu-arrow" />
+          </button>
+        )}
+
+        {isAdmin && (
+          <button className="profile-menu-item" onClick={onNavigateToNotifications}>
+            <div className="menu-item-left">
+              <div className="menu-icon" style={{ background: 'linear-gradient(135deg, #f59e0b, #ef4444)' }}>
+                <Bell size={20} />
+              </div>
+              <span className="menu-label">ارسال نوتیفیکیشن</span>
             </div>
             <ChevronRight size={20} className="menu-arrow" />
           </button>

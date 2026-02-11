@@ -20,6 +20,7 @@ import AdminSubscriptionManager from './components/AdminSubscriptionManager';
 import AdminDiscountManager from './components/AdminDiscountManager';
 import SubAdminManager from './components/SubAdminManager';
 import AdminUsersManager from './components/AdminUsersManager';
+import AdminNotificationSender from './components/AdminNotificationSender';
 import TeamConversations from './components/TeamConversations';
 import TeamChatView from './components/TeamChatView';
 import PushPermission from './components/PushPermission';
@@ -650,6 +651,7 @@ const CutifyGlassDemo = () => {
             onNavigateToSubscription={() => setActiveTab('subscription')} 
             onNavigateToSubAdmin={() => setActiveTab('subAdminManager')}
             onNavigateToUsers={() => setActiveTab('adminUsers')}
+            onNavigateToNotifications={() => setActiveTab('adminNotifications')}
           />
         </div>
       );
@@ -763,6 +765,15 @@ if (activeTab === 'projects') {
     if (activeTab === 'adminUsers') {
       return (
         <AdminUsersManager 
+          onBack={() => setActiveTab('profile')} 
+        />
+      );
+    }
+
+    // صفحه ارسال نوتیفیکیشن (فقط ادمین ارشد)
+    if (activeTab === 'adminNotifications') {
+      return (
+        <AdminNotificationSender 
           onBack={() => setActiveTab('profile')} 
         />
       );
@@ -964,7 +975,7 @@ if (activeTab === 'projects') {
         <div className="bg-overlay"></div>
         
         {/* لایه شیشه‌ای روی بک‌گراند - در صفحه پشتیبانی و خریدها */}
-        {(activeTab === 'support' || activeTab === 'adminChat' || activeTab === 'shop' || activeTab === 'adminDiscounts' || activeTab === 'subAdminManager' || activeTab === 'adminUsers' || activeTab === 'teamChat' || activeTab === 'teamChatView') && <div className="bg-glass-overlay"></div>}
+        {(activeTab === 'support' || activeTab === 'adminChat' || activeTab === 'shop' || activeTab === 'adminDiscounts' || activeTab === 'subAdminManager' || activeTab === 'adminUsers' || activeTab === 'adminNotifications' || activeTab === 'teamChat' || activeTab === 'teamChatView') && <div className="bg-glass-overlay"></div>}
 
         {/* Content */}
         {renderContent()}
@@ -975,7 +986,7 @@ if (activeTab === 'projects') {
         )}
 
         {/* Bottom Navigation - مخفی در صفحه‌های تمام‌صفحه */}
-        {activeTab !== 'support' && activeTab !== 'alphaChannel' && activeTab !== 'adminChat' && activeTab !== 'subAdminManager' && activeTab !== 'adminUsers' && activeTab !== 'teamChat' && activeTab !== 'teamChatView' && activeTab !== 'settings' && (
+        {activeTab !== 'support' && activeTab !== 'alphaChannel' && activeTab !== 'adminChat' && activeTab !== 'subAdminManager' && activeTab !== 'adminUsers' && activeTab !== 'adminNotifications' && activeTab !== 'teamChat' && activeTab !== 'teamChatView' && activeTab !== 'settings' && (
           <div className="bottom-nav-glass">
             <div className="nav-items">
               <button 
