@@ -25,7 +25,7 @@ const usePresence = (chatType, conversationId) => {
       await fetch(`${API_URL}/push/presence`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({ chatType: chatTypeRef.current, conversationId: parseInt(convId) })
+        body: JSON.stringify({ chatType: chatTypeRef.current, conversationId: convId })
       });
     } catch (e) {}
   }, []);
@@ -38,7 +38,7 @@ const usePresence = (chatType, conversationId) => {
     // Use sendBeacon for reliable delivery when page is closing/hiding
     const data = JSON.stringify({ 
       chatType: chatTypeRef.current, 
-      leftConversationId: parseInt(convId),
+      leftConversationId: convId,
       token: token 
     });
     
@@ -51,7 +51,7 @@ const usePresence = (chatType, conversationId) => {
       fetch(`${API_URL}/push/presence`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({ chatType: chatTypeRef.current, leftConversationId: parseInt(convId) }),
+        body: JSON.stringify({ chatType: chatTypeRef.current, leftConversationId: convId }),
         keepalive: true
       }).catch(() => {});
     }

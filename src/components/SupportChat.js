@@ -338,40 +338,30 @@ useEffect(() => {
     const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
     
     if (isMobile) {
-      document.body.style.position = 'fixed';
-      document.body.style.width = '100%';
-      document.body.style.height = '100%';
+      document.body.style.overflow = 'hidden';
     }
 
-    // Android keyboard fix: use visualViewport to detect keyboard
+    // Android + iOS: resize container to match visualViewport when keyboard opens
+    const container = document.querySelector('.support-chat-container');
     const handleViewportResize = () => {
-      if (window.visualViewport) {
-        const inputEl = document.querySelector('.chat-input-container-glass');
-        if (inputEl) {
-          const keyboardHeight = window.innerHeight - window.visualViewport.height;
-          if (keyboardHeight > 100) {
-            inputEl.style.bottom = keyboardHeight + 'px';
-          } else {
-            inputEl.style.bottom = '';
-          }
-        }
+      if (window.visualViewport && container) {
+        container.style.height = window.visualViewport.height + 'px';
       }
     };
 
-    if (window.visualViewport) {
+    if (isMobile && window.visualViewport) {
       window.visualViewport.addEventListener('resize', handleViewportResize);
-      window.visualViewport.addEventListener('scroll', handleViewportResize);
     }
     
     return () => {
       if (isMobile) {
-        document.body.style.position = '';
-        document.body.style.width = '';
-        document.body.style.height = '';
+        document.body.style.overflow = '';
       }
-      if (window.visualViewport) {
+      if (isMobile && window.visualViewport) {
         window.visualViewport.removeEventListener('resize', handleViewportResize);
-        window.visualViewport.removeEventListener('scroll', handleViewportResize);
+      }
+      if (container) {
+        container.style.height = '';
       }
     };
   }, []);

@@ -1191,7 +1191,7 @@ background: rgba(255, 255, 255, 0.067);
   overflow: hidden;
 }
 
-/* فقط موبایل - fixed برای جلوگیری از حرکت بک‌گراند */
+/* فقط موبایل */
 @media (max-width: 440px) {
   .support-chat-container {
     position: fixed;
@@ -1199,6 +1199,8 @@ background: rgba(255, 255, 255, 0.067);
     left: 0;
     right: 0;
     bottom: 0;
+    height: 100dvh;
+    height: -webkit-fill-available;
   }
 }
 
@@ -1278,11 +1280,12 @@ background: rgba(255, 255, 255, 0.067);
   overflow-y: auto;
   overflow-x: hidden;
   padding: 20px 16px;
-  padding-bottom: 120px;
+  padding-bottom: 100px;
   display: flex;
   flex-direction: column;
   gap: 10px;
   -webkit-overflow-scrolling: touch;
+  min-height: 0;
 }
 
 .chat-messages-area::-webkit-scrollbar {
@@ -1331,6 +1334,7 @@ background: rgba(255, 255, 255, 0.067);
   text-align: right;
 }
 
+/* Desktop: absolute positioning */
 .chat-input-container-glass {
   position: absolute;
   bottom: 20px;
@@ -1339,15 +1343,16 @@ background: rgba(255, 255, 255, 0.067);
   z-index: 20;
 }
 
-/* موبایل - اینپوت بالای کیبورد */
+/* Mobile: flex layout so keyboard pushes input up */
 @media (max-width: 440px) {
+  .chat-messages-area {
+    padding-bottom: 16px;
+  }
   .chat-input-container-glass {
-    position: fixed;
-    bottom: env(keyboard-inset-height, 20px);
-    left: 16px;
-    right: 16px;
-    padding-bottom: env(safe-area-inset-bottom, 0px);
-    transition: bottom 0.1s ease-out;
+    position: static;
+    flex-shrink: 0;
+    padding: 8px 12px;
+    padding-bottom: max(8px, env(safe-area-inset-bottom, 8px));
   }
 }
 
@@ -1426,9 +1431,6 @@ background: rgba(255, 255, 255, 0.067);
 }
 
 /* چت تمام صفحه بدون navbar */
-.support-chat-fullscreen .chat-input-container-glass {
-  bottom: 20px;
-}
 
 /* ============================= */
 /* منوی پیام - ویرایش و حذف */

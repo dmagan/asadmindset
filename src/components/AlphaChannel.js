@@ -26,6 +26,7 @@ import Pusher from 'pusher-js';
 import { authService } from '../services/authService';
 import ImageZoomModal from './ImageZoomModal';
 import { formatRelativeTime } from '../utils/dateUtils';
+import usePresence from '../hooks/usePresence';
 
 const API_URL = 'https://asadmindset.com/wp-json/asadmindset/v1';
 const PUSHER_KEY = '71815fd9e2b90f89a57b';
@@ -59,6 +60,9 @@ const AlphaChannel = ({ onBack, isAdmin: isAdminProp }) => {
   
   // از prop استفاده کن، اگه نبود خودش چک کنه
   const isAdmin = isAdminProp !== undefined ? isAdminProp : authService.getUser()?.nicename === 'admin';
+  
+  // Track presence in alpha channel (prevents push notifications while viewing)
+  usePresence('alpha', 'channel');
   
   // Media states
   const [zoomedImage, setZoomedImage] = useState(null);

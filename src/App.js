@@ -23,6 +23,7 @@ import AdminUsersManager from './components/AdminUsersManager';
 import TeamConversations from './components/TeamConversations';
 import TeamChatView from './components/TeamChatView';
 import PushPermission from './components/PushPermission';
+import SettingsPage from './components/SettingsPage';
 import { authService } from './services/authService';
 import { pushService } from './services/pushService';
 import Pusher from 'pusher-js';
@@ -45,6 +46,7 @@ import {
   Brain,
   BookOpen,
   Loader2,
+  Settings,
 } from 'lucide-react';
 
 const CutifyGlassDemo = () => {
@@ -725,6 +727,15 @@ if (activeTab === 'projects') {
         />
       );
     }
+    // صفحه تنظیمات
+    if (activeTab === 'settings') {
+      return (
+        <SettingsPage 
+          onBack={() => setActiveTab('home')}
+          isTeamMember={canManageSupport}
+        />
+      );
+    }
     // صفحه آلفا
     if (activeTab === 'alpha') {
       return <AlphaPage onBack={() => setActiveTab('home')} onOpenChannel={handleAlphaJoin} />;
@@ -791,11 +802,31 @@ if (activeTab === 'projects') {
     return (
       <div className="content">
 
-        {/* Logo */}
-        <div className="logo">
-          <div className="logo-container">
-            <img src="/cutify-icon.png" alt="Cutify Logo" className="custom-logo" />
+        {/* Logo + Settings */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 20px' }}>
+          <button 
+            onClick={() => setActiveTab('settings')}
+            style={{
+              background: 'rgba(255, 255, 255, 0.1)',
+              border: '1px solid rgba(255, 255, 255, 0.15)',
+              borderRadius: '12px',
+              padding: '8px',
+              color: 'rgba(255, 255, 255, 0.6)',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              transition: 'all 0.2s',
+            }}
+          >
+            <Settings size={20} />
+          </button>
+          <div className="logo">
+            <div className="logo-container">
+              <img src="/cutify-icon.png" alt="Cutify Logo" className="custom-logo" />
+            </div>
           </div>
+          <div style={{ width: 36 }}></div>
         </div>
 
         {/* Quick Edit Card */}
@@ -944,7 +975,7 @@ if (activeTab === 'projects') {
         )}
 
         {/* Bottom Navigation - مخفی در صفحه‌های تمام‌صفحه */}
-        {activeTab !== 'support' && activeTab !== 'alphaChannel' && activeTab !== 'adminChat' && activeTab !== 'subAdminManager' && activeTab !== 'adminUsers' && activeTab !== 'teamChat' && activeTab !== 'teamChatView' && (
+        {activeTab !== 'support' && activeTab !== 'alphaChannel' && activeTab !== 'adminChat' && activeTab !== 'subAdminManager' && activeTab !== 'adminUsers' && activeTab !== 'teamChat' && activeTab !== 'teamChatView' && activeTab !== 'settings' && (
           <div className="bottom-nav-glass">
             <div className="nav-items">
               <button 
