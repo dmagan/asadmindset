@@ -11,6 +11,8 @@ import {
   MailOpen
 } from 'lucide-react';
 import { authService } from '../services/authService';
+import useOnlineStatus from '../hooks/useOnlineStatus';
+import { formatConvTime } from '../utils/dateUtils';
 
 const API_URL = 'https://asadmindset.com/wp-json/asadmindset/v1';
 
@@ -19,6 +21,10 @@ const AdminConversations = ({ onBack, onSelectConversation, onTeamChat }) => {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [teamUnreadCount, setTeamUnreadCount] = useState(0);
+  
+  // Online status for all conversation users
+  const userIds = conversations.map(c => c.userId).filter(Boolean);
+  const onlineStatuses = useOnlineStatus(userIds);
   
   // Swipe state
   const [swipedId, setSwipedId] = useState(null);
@@ -182,14 +188,7 @@ const AdminConversations = ({ onBack, onSelectConversation, onTeamChat }) => {
   };
 
   const formatTime = (dateString) => {
-    if (!dateString) return '';
-    const date = new Date(dateString);
-    const now = new Date();
-    const diff = now - date;
-    if (diff < 60000) return 'الان';
-    if (diff < 3600000) return `${Math.floor(diff / 60000)} دقیقه`;
-    if (diff < 86400000) return `${Math.floor(diff / 3600000)} ساعت`;
-    return date.toLocaleDateString('en-US');
+    return formatConvTime(dateString);
   };
 
   return (
@@ -283,6 +282,7 @@ const AdminConversations = ({ onBack, onSelectConversation, onTeamChat }) => {
               >
                 <div className="conv-avatar">
                   <User size={24} />
+                  {onlineStatuses[String(conv.userId)]?.online && <span className="online-dot-avatar"></span>}
                 </div>
                 
                 <div className="conv-content">

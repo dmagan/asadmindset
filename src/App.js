@@ -424,6 +424,38 @@ const CutifyGlassDemo = () => {
     }
   }, [isLoggedIn]);
 
+  // General online status heartbeat (even when not in a specific chat)
+  useEffect(() => {
+    if (!isLoggedIn) return;
+    const API = 'https://asadmindset.com/wp-json/asadmindset/v1';
+    
+    const sendHeartbeat = async () => {
+      if (document.visibilityState !== 'visible') return;
+      try {
+        const token = authService.getToken();
+        if (!token) return;
+        await fetch(`${API}/push/presence`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify({ chatType: 'app', conversationId: 0 })
+        });
+      } catch (e) {}
+    };
+
+    sendHeartbeat();
+    const interval = setInterval(sendHeartbeat, 30000);
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') sendHeartbeat();
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, [isLoggedIn]);
+
   // Push notification: listen for foreground messages
   useEffect(() => {
     if (!isLoggedIn) return;

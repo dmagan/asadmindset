@@ -2341,7 +2341,7 @@ background: rgba(255, 255, 255, 0.067);
 
 .nav-badge-team {
   right: auto;
-  left: -20px;
+  left: -14px;
   background: linear-gradient(135deg, #10b981, #059669);
   box-shadow: 0 2px 8px rgba(16, 185, 129, 0.4);
 }
@@ -2531,4 +2531,35 @@ background: rgba(255, 255, 255, 0.067);
   50% {
     height: 16px;
   }
+}
+/* ─── Online Status Indicators ─── */
+.online-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  background: #22c55e;
+  border-radius: 50%;
+  margin-left: 5px;
+  animation: onlinePulse 2s infinite;
+}
+
+.online-dot-avatar {
+  position: absolute;
+  bottom: 2px;
+  right: 2px;
+  width: 10px;
+  height: 10px;
+  background: #22c55e;
+  border-radius: 50%;
+  border: 2px solid rgba(20, 20, 35, 0.95);
+  z-index: 2;
+}
+
+.conv-avatar, .tc-item-avatar {
+  position: relative;
+}
+
+@keyframes onlinePulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
 }

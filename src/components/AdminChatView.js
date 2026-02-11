@@ -4,6 +4,8 @@ import Pusher from 'pusher-js';
 import { authService } from '../services/authService';
 import ImageZoomModal from './ImageZoomModal';
 import usePresence from '../hooks/usePresence';
+import useOnlineStatus, { formatLastSeen } from '../hooks/useOnlineStatus';
+import { formatMsgTime } from '../utils/dateUtils';
 
 const API_URL = 'https://asadmindset.com/wp-json/asadmindset/v1';
 const PUSHER_KEY = '71815fd9e2b90f89a57b';
@@ -16,6 +18,7 @@ const AdminChatView = ({ conversationId, onBack }) => {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [conversation, setConversation] = useState(null);
+  const onlineStatuses = useOnlineStatus(conversation?.userId ? [conversation.userId] : []);
   
   // Typing indicator state - shows when user is typing
   const [isUserTyping, setIsUserTyping] = useState(false);
@@ -390,8 +393,7 @@ useEffect(() => {
   };
 
   const formatMessageTime = (dateString) => {
-    const date = new Date(dateString);
-    return `${date.getHours()}:${date.getMinutes().toString().padStart(2, '0')}`;
+    return formatMsgTime(dateString);
   };
 
   const formatTime = (seconds) => {
@@ -1153,7 +1155,13 @@ useEffect(() => {
           <div className="chat-header-info">
             <div className="chat-header-text">
               <span className="chat-header-title">{conversation?.userName || 'کاربر'}</span>
-<span className="chat-header-status">{conversation?.userEmail || ''}</span>
+              <span className="chat-header-status">
+                {conversation?.userId && onlineStatuses[String(conversation.userId)]?.online 
+                  ? <><span className="online-dot"></span> آنلاین</>
+                  : conversation?.userId && onlineStatuses[String(conversation.userId)]?.lastSeen
+                    ? `آخرین بازدید: ${formatLastSeen(onlineStatuses[String(conversation.userId)].lastSeen)}`
+                    : (conversation?.userEmail || '')}
+              </span>
             </div>
             <button 
               onClick={markAsUnread}

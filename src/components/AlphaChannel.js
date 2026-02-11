@@ -25,6 +25,7 @@ import {
 import Pusher from 'pusher-js';
 import { authService } from '../services/authService';
 import ImageZoomModal from './ImageZoomModal';
+import { formatRelativeTime } from '../utils/dateUtils';
 
 const API_URL = 'https://asadmindset.com/wp-json/asadmindset/v1';
 const PUSHER_KEY = '71815fd9e2b90f89a57b';
@@ -429,20 +430,7 @@ const AlphaChannel = ({ onBack, isAdmin: isAdminProp }) => {
 
   // Format time
   const formatTime = (dateString) => {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diff = now - date;
-    
-    const minutes = Math.floor(diff / 60000);
-    const hours = Math.floor(diff / 3600000);
-    const days = Math.floor(diff / 86400000);
-    
-    if (minutes < 1) return 'همین الان';
-    if (minutes < 60) return `${minutes} دقیقه پیش`;
-    if (hours < 24) return `${hours} ساعت پیش`;
-    if (days < 7) return `${days} روز پیش`;
-    
-    return date.toLocaleDateString('en-US');
+    return formatRelativeTime(dateString);
   };
 
   // Format audio duration

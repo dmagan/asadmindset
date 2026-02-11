@@ -4,6 +4,8 @@ import Pusher from 'pusher-js';
 import { authService } from '../services/authService';
 import ImageZoomModal from './ImageZoomModal';
 import usePresence from '../hooks/usePresence';
+import useOnlineStatus, { formatLastSeen } from '../hooks/useOnlineStatus';
+import { formatMsgTime, parseServerDate } from '../utils/dateUtils';
 
 const API_URL = 'https://asadmindset.com/wp-json/asadmindset/v1';
 const PUSHER_KEY = '71815fd9e2b90f89a57b';
@@ -29,6 +31,12 @@ const TeamChatView = ({ conversationId, onBack }) => {
     } catch (e) { return null; }
   };
   const currentUserId = getCurrentUserId();
+
+  // Online status for DM partner
+  const otherMemberId = conversation?.type === 'direct' 
+    ? conversation?.members?.find(m => m.userId !== currentUserId)?.userId 
+    : null;
+  const onlineStatuses = useOnlineStatus(otherMemberId ? [otherMemberId] : []);
 
   // Typing
   const [typingUsers, setTypingUsers] = useState({});
@@ -158,12 +166,12 @@ const TeamChatView = ({ conversationId, onBack }) => {
       if (!res.ok) throw new Error('Failed');
       const data = await res.json();
       setConversation(data.conversation);
-      const othersReadAt = data.conversation.othersLastReadAt ? new Date(data.conversation.othersLastReadAt) : null;
+      const othersReadAt = data.conversation.othersLastReadAt ? parseServerDate(data.conversation.othersLastReadAt) : null;
       setMessages(data.messages.map(msg => {
         // Determine read status for own messages
         let status = 'sent';
         if (msg.senderId === currentUserId && othersReadAt) {
-          const msgTime = new Date(msg.createdAt);
+          const msgTime = parseServerDate(msg.createdAt);
           if (msgTime <= othersReadAt) {
             status = 'read';
           } else {
@@ -275,7 +283,7 @@ const TeamChatView = ({ conversationId, onBack }) => {
   };
 
   const handleInputChange = (e) => { setNewMessage(e.target.value); if (e.target.value.trim()) sendTypingIndicator(true); else sendTypingIndicator(false); };
-  const fmtTime = (s) => { const d = new Date(s); return `${d.getHours()}:${d.getMinutes().toString().padStart(2,'0')}`; };
+  const fmtTime = (s) => formatMsgTime(s);
   const fmtDuration = (s) => `${Math.floor(s/60)}:${(s%60).toString().padStart(2,'0')}`;
 
   // ─── Swipe to reply ───
@@ -547,6 +555,9 @@ const TeamChatView = ({ conversationId, onBack }) => {
   const getHeaderSubtitle = () => {
     if (!conversation) return '';
     if (conversation.type === 'group') return `${conversation.members?.length || 0} عضو`;
+    // DM - show online status
+    if (otherMemberId && onlineStatuses[String(otherMemberId)]?.online) return '🟢 آنلاین';
+    if (otherMemberId && onlineStatuses[String(otherMemberId)]?.lastSeen) return `آخرین بازدید: ${formatLastSeen(onlineStatuses[String(otherMemberId)].lastSeen)}`;
     return '';
   };
 

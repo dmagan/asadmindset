@@ -14,6 +14,8 @@ import {
 } from 'lucide-react';
 import Pusher from 'pusher-js';
 import { authService } from '../services/authService';
+import useOnlineStatus from '../hooks/useOnlineStatus';
+import { formatConvTime } from '../utils/dateUtils';
 
 const API_URL = 'https://asadmindset.com/wp-json/asadmindset/v1';
 const PUSHER_KEY = '71815fd9e2b90f89a57b';
@@ -47,6 +49,13 @@ const TeamConversations = ({ onBack, onSelectConversation }) => {
   
   const currentUser = authService.getUser();
   const currentUserId = getUserIdFromToken();
+
+  // Collect DM partner IDs for online status
+  const dmPartnerIds = conversations
+    .filter(c => c.type === 'direct')
+    .map(c => c.members?.find(m => m.userId !== currentUserId)?.userId)
+    .filter(Boolean);
+  const onlineStatuses = useOnlineStatus(dmPartnerIds);
   const pusherRef = useRef(null);
   const channelRef = useRef(null);
 
@@ -167,14 +176,7 @@ const TeamConversations = ({ onBack, onSelectConversation }) => {
   });
 
   const formatTime = (dateString) => {
-    if (!dateString) return '';
-    const date = new Date(dateString);
-    const now = new Date();
-    const diff = now - date;
-    if (diff < 60000) return 'الان';
-    if (diff < 3600000) return `${Math.floor(diff / 60000)} دقیقه`;
-    if (diff < 86400000) return `${Math.floor(diff / 3600000)} ساعت`;
-    return date.toLocaleDateString('en-US');
+    return formatConvTime(dateString);
   };
 
   const getLastMessagePreview = (conv) => {
@@ -241,6 +243,10 @@ const TeamConversations = ({ onBack, onSelectConversation }) => {
             <div key={conv.id} className={`tc-item ${conv.unreadCount > 0 ? 'tc-item-unread' : ''}`} onClick={() => onSelectConversation(conv.id)}>
               <div className={`tc-item-avatar ${conv.type === 'group' ? 'tc-item-avatar-group' : ''}`}>
                 {conv.type === 'group' ? <Users size={22} /> : <User size={22} />}
+                {conv.type === 'direct' && (() => {
+                  const partnerId = conv.members?.find(m => m.userId !== currentUserId)?.userId;
+                  return partnerId && onlineStatuses[String(partnerId)]?.online ? <span className="online-dot-avatar"></span> : null;
+                })()}
               </div>
               <div className="tc-item-body">
                 <div className="tc-item-top">

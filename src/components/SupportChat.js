@@ -4,6 +4,7 @@ import Pusher from 'pusher-js';
 import { authService } from '../services/authService';
 import ImageZoomModal from './ImageZoomModal';
 import usePresence from '../hooks/usePresence';
+import { formatMsgTime } from '../utils/dateUtils';
 
 const API_URL = 'https://asadmindset.com/wp-json/asadmindset/v1';
 const PUSHER_KEY = '71815fd9e2b90f89a57b';
@@ -319,8 +320,7 @@ useEffect(() => {
   };
 
   const formatMessageTime = (dateString) => {
-    const date = new Date(dateString);
-    return `${date.getHours()}:${date.getMinutes().toString().padStart(2, '0')}`;
+    return formatMsgTime(dateString);
   };
 
   const formatTime = (seconds) => {
@@ -342,12 +342,36 @@ useEffect(() => {
       document.body.style.width = '100%';
       document.body.style.height = '100%';
     }
+
+    // Android keyboard fix: use visualViewport to detect keyboard
+    const handleViewportResize = () => {
+      if (window.visualViewport) {
+        const inputEl = document.querySelector('.chat-input-container-glass');
+        if (inputEl) {
+          const keyboardHeight = window.innerHeight - window.visualViewport.height;
+          if (keyboardHeight > 100) {
+            inputEl.style.bottom = keyboardHeight + 'px';
+          } else {
+            inputEl.style.bottom = '';
+          }
+        }
+      }
+    };
+
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', handleViewportResize);
+      window.visualViewport.addEventListener('scroll', handleViewportResize);
+    }
     
     return () => {
       if (isMobile) {
         document.body.style.position = '';
         document.body.style.width = '';
         document.body.style.height = '';
+      }
+      if (window.visualViewport) {
+        window.visualViewport.removeEventListener('resize', handleViewportResize);
+        window.visualViewport.removeEventListener('scroll', handleViewportResize);
       }
     };
   }, []);
