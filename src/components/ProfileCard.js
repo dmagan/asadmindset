@@ -526,7 +526,7 @@ const ProfileCard = ({ onNavigateToSubscription, onNavigateToSubAdmin, onNavigat
           display: flex;
           align-items: center;
           justify-content: center;
-          color: #60a5fa;
+          color: #ffffffff;
         }
 
         .menu-icon.subscription-icon {

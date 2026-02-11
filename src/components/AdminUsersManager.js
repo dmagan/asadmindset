@@ -18,7 +18,11 @@ import {
   BarChart3,
   Filter,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  Bell,
+  BellOff,
+  Copy,
+  Check as CheckIcon
 } from 'lucide-react';
 import { authService } from '../services/authService';
 
@@ -727,7 +731,12 @@ const AdminUsersManager = ({ onBack }) => {
                     borderTop: '1px solid rgba(255,255,255,0.06)',
                     display: 'flex', flexDirection: 'column', gap: '10px'
                   }}>
-                    <DetailRow icon={<Mail size={14} />} label="ایمیل" value={u.email} />
+                    <DetailRow icon={<Mail size={14} />} label="ایمیل" value={
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span style={{ wordBreak: 'break-all' }}>{u.email}</span>
+                        <CopyBtn text={u.email} />
+                      </span>
+                    } />
                     <DetailRow icon={<AtSign size={14} />} label="نام کاربری" value={u.username} />
                     <DetailRow icon={<Calendar size={14} />} label="تاریخ ثبت‌نام" value={formatDate(u.registeredAt)} />
                     {hasSub && (
@@ -749,6 +758,20 @@ const AdminUsersManager = ({ onBack }) => {
                         )}
                       </>
                     )}
+
+                    {/* Notification Preferences */}
+                    <div style={{ marginTop: '6px', paddingTop: '10px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
+                        <Bell size={13} style={{ color: 'rgba(255,255,255,0.4)' }} />
+                        <span style={{ fontSize: '12px', color: 'rgba(255,255,255,0.4)' }}>نوتیفیکیشن‌ها</span>
+                      </div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                        <NotifTag label="کلی" active={u.notificationPrefs?.enabled !== false} />
+                        <NotifTag label="کانال" active={u.notificationPrefs?.alpha_channel !== false} />
+                        <NotifTag label="پشتیبانی" active={u.notificationPrefs?.support !== false} />
+                        <NotifTag label="تیم" active={u.notificationPrefs?.team_chat !== false} />
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
@@ -861,12 +884,45 @@ const SubStatBadge = ({ label, count, color }) => (
   </div>
 );
 
+const CopyBtn = ({ text }) => {
+  const [copied, setCopied] = React.useState(false);
+  const handleCopy = (e) => {
+    e.stopPropagation();
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  };
+  return (
+    <button onClick={handleCopy} style={{
+      background: 'none', border: 'none', cursor: 'pointer', padding: '2px',
+      color: copied ? '#34d399' : 'rgba(255,255,255,0.3)', display: 'flex',
+      flexShrink: 0, transition: 'color 0.2s'
+    }}>
+      {copied ? <CheckIcon size={13} /> : <Copy size={13} />}
+    </button>
+  );
+};
+
 const DetailRow = ({ icon, label, value }) => (
   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
     <span style={{ color: 'rgba(255,255,255,0.3)', display: 'flex', flexShrink: 0 }}>{icon}</span>
     <span style={{ fontSize: '12px', color: 'rgba(255,255,255,0.45)', whiteSpace: 'nowrap' }}>{label}:</span>
     <span style={{ fontSize: '12px', color: 'rgba(255,255,255,0.8)', wordBreak: 'break-all' }}>{value}</span>
   </div>
+);
+
+const NotifTag = ({ label, active }) => (
+  <span style={{
+    display: 'inline-flex', alignItems: 'center', gap: '4px',
+    padding: '3px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: '500',
+    background: active ? 'rgba(52,211,153,0.1)' : 'rgba(248,113,113,0.1)',
+    color: active ? '#34d399' : '#f87171',
+    border: `1px solid ${active ? 'rgba(52,211,153,0.2)' : 'rgba(248,113,113,0.2)'}`,
+  }}>
+    {label}
+    <span>{active ? '✓' : '✗'}</span>
+  </span>
 );
 
 const PagBtn = ({ label, disabled, onClick }) => (

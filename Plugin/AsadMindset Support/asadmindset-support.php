@@ -1737,8 +1737,15 @@ class AsadMindset_Support {
                 'email' => $u->user_email,
                 'displayName' => $u->display_name,
                 'registeredAt' => $u->user_registered,
-                'subscription' => null
+                'subscription' => null,
+                'notificationPrefs' => null
             );
+            
+            // Get notification preferences
+            $notif_prefs = get_user_meta($u->ID, 'notification_preferences', true);
+            if (is_array($notif_prefs)) {
+                $result['notificationPrefs'] = $notif_prefs;
+            }
             
             if ($table_exists) {
                 // First try to find active/approved subscription
