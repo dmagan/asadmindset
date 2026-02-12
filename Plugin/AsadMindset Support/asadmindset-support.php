@@ -266,6 +266,13 @@ class AsadMindset_Support {
             'permission_callback' => array($this, 'check_admin_auth_support')
         ));
         
+        // Archive/unarchive conversation
+        register_rest_route($namespace, '/admin/conversations/(?P<id>\d+)/archive', array(
+            'methods' => 'POST',
+            'callback' => array($this, 'archive_conversation'),
+            'permission_callback' => array($this, 'check_admin_auth_support')
+        ));
+        
         // Get conversation messages (admin/support agent)
         register_rest_route($namespace, '/admin/conversations/(?P<id>\d+)', array(
             'methods' => 'GET',
@@ -341,6 +348,13 @@ class AsadMindset_Support {
             'methods' => 'GET',
             'callback' => array($this, 'get_all_users'),
             'permission_callback' => array($this, 'check_admin_auth')
+        ));
+        
+        // Start chat with a user (admin/support)
+        register_rest_route($namespace, '/admin/start-chat', array(
+            'methods' => 'POST',
+            'callback' => array($this, 'admin_start_chat'),
+            'permission_callback' => array($this, 'check_admin_auth_support')
         ));
         
         // Get Pusher config (for client)
@@ -1161,6 +1175,11 @@ class AsadMindset_Support {
         $table_messages = $wpdb->prefix . 'support_messages';
         
         $status = $request->get_param('status');
+        $admin_uid = $this->get_user_id_from_request($request);
+        
+        // Get archived conversation IDs for this admin
+        $archived = get_user_meta($admin_uid, 'archived_conversations', true);
+        if (!is_array($archived)) $archived = [];
         
         $where = '';
         if ($status && $status !== 'all') {
@@ -1195,7 +1214,48 @@ class AsadMindset_Support {
             );
         }, $conversations);
         
+        // Filter out archived (unless they have new unread messages)
+        $show_archived = $request->get_param('archived') === '1';
+        
+        $formatted = array_values(array_filter($formatted, function($conv) use ($archived, $show_archived) {
+            $is_archived = in_array($conv['id'], $archived);
+            if ($show_archived) {
+                // Show only archived
+                return $is_archived;
+            }
+            // Show non-archived, or archived with new messages
+            if ($is_archived) {
+                return $conv['unreadCount'] > 0;
+            }
+            return true;
+        }));
+        
         return rest_ensure_response($formatted);
+    }
+    
+    /**
+     * POST /admin/conversations/{id}/archive - Archive/unarchive a conversation for this admin
+     */
+    public function archive_conversation($request) {
+        $conv_id = (int) $request->get_param('id');
+        $admin_uid = $this->get_user_id_from_request($request);
+        
+        $archived = get_user_meta($admin_uid, 'archived_conversations', true);
+        if (!is_array($archived)) $archived = [];
+        
+        if (in_array($conv_id, $archived)) {
+            // Unarchive
+            $archived = array_values(array_diff($archived, [$conv_id]));
+            $action = 'unarchived';
+        } else {
+            // Archive
+            $archived[] = $conv_id;
+            $action = 'archived';
+        }
+        
+        update_user_meta($admin_uid, 'archived_conversations', $archived);
+        
+        return rest_ensure_response(['success' => true, 'action' => $action]);
     }
     
     /**
@@ -1684,6 +1744,57 @@ class AsadMindset_Support {
         );
         
         return rest_ensure_response(array('success' => true));
+    }
+    
+    /**
+     * Get all registered users (admin only)
+     */
+    /**
+     * POST /admin/start-chat - Get or create conversation for a user (admin initiated)
+     */
+    public function admin_start_chat($request) {
+        global $wpdb;
+        $params = $request->get_json_params();
+        $target_user_id = (int) ($params['userId'] ?? 0);
+        
+        if (!$target_user_id) {
+            return new WP_Error('missing_user', 'userId is required', array('status' => 400));
+        }
+        
+        $user = get_user_by('id', $target_user_id);
+        if (!$user) {
+            return new WP_Error('user_not_found', 'کاربری با این شناسه یافت نشد', array('status' => 404));
+        }
+        
+        $table_conversations = $wpdb->prefix . 'support_conversations';
+        
+        // Get existing conversation
+        $conversation = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM $table_conversations WHERE user_id = %d ORDER BY id DESC LIMIT 1",
+            $target_user_id
+        ));
+        
+        if (!$conversation) {
+            // Create new conversation
+            $wpdb->insert($table_conversations, array(
+                'user_id' => $target_user_id,
+                'status' => 'open'
+            ));
+            $conversation_id = $wpdb->insert_id;
+        } else {
+            $conversation_id = $conversation->id;
+        }
+        
+        return rest_ensure_response(array(
+            'success' => true,
+            'conversationId' => (int) $conversation_id,
+            'user' => array(
+                'id' => (int) $user->ID,
+                'displayName' => $user->display_name,
+                'email' => $user->user_email,
+                'username' => $user->user_login
+            )
+        ));
     }
     
     /**

@@ -416,15 +416,19 @@ const CutifyGlassDemo = () => {
 
   // Push notification: show prompt after login if not registered
   useEffect(() => {
-    if (isLoggedIn && pushService.isSupported() && !pushService.isRegistered()) {
-      // Show prompt after 3 seconds
-      const timer = setTimeout(() => {
-        if (pushService.getPermissionState() !== 'denied') {
-          setShowPushPrompt(true);
-        }
-      }, 3000);
-      return () => clearTimeout(timer);
-    }
+    if (!isLoggedIn) return;
+    const checkPush = async () => {
+      const supported = await pushService.isSupportedAsync();
+      if (supported && !pushService.isRegistered()) {
+        const timer = setTimeout(() => {
+          if (pushService.getPermissionState() !== 'denied') {
+            setShowPushPrompt(true);
+          }
+        }, 3000);
+        return () => clearTimeout(timer);
+      }
+    };
+    checkPush();
   }, [isLoggedIn]);
 
   // General online status heartbeat (even when not in a specific chat)

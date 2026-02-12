@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { getMessaging, getToken, onMessage } from 'firebase/messaging';
+import { getMessaging, getToken, onMessage, isSupported as isMessagingSupported } from 'firebase/messaging';
 import { authService } from './authService';
 
 const API_URL = 'https://asadmindset.com/wp-json/asadmindset/v1';
@@ -17,14 +17,28 @@ const VAPID_KEY = 'BCi3AjSq7B7i1mTDBxAM0jPX1cx2fIkeFSCJNzB6Jt4Uv4BwAxWNelD7BdmYy
 
 let app = null;
 let messaging = null;
+let firebaseSupported = null;
+
+const checkSupported = async () => {
+  if (firebaseSupported === null) {
+    try {
+      firebaseSupported = await isMessagingSupported();
+    } catch (e) {
+      firebaseSupported = false;
+    }
+  }
+  return firebaseSupported;
+};
 
 const getFirebaseMessaging = () => {
   if (!messaging) {
     try {
+      // If not yet checked or explicitly unsupported, skip
+      if (firebaseSupported !== true) return null;
       app = initializeApp(firebaseConfig);
       messaging = getMessaging(app);
     } catch (e) {
-      console.error('Firebase init error:', e);
+      console.warn('Firebase init skipped:', e.message);
       return null;
     }
   }
@@ -35,6 +49,11 @@ export const pushService = {
 
   isSupported() {
     return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+  },
+
+  async isSupportedAsync() {
+    if (!this.isSupported()) return false;
+    return await checkSupported();
   },
 
   isInstalledPWA() {
@@ -49,6 +68,11 @@ export const pushService = {
   async requestPermissionAndGetToken() {
     if (!this.isSupported()) {
       throw new Error('Push not supported on this device');
+    }
+
+    const supported = await checkSupported();
+    if (!supported) {
+      throw new Error('Firebase messaging not supported in this browser');
     }
 
     // Step 1: Request permission
@@ -134,12 +158,18 @@ export const pushService = {
   },
 
   onForegroundMessage(callback) {
-    const msg = getFirebaseMessaging();
-    if (!msg) return () => {};
-    return onMessage(msg, (payload) => {
-      console.log('Foreground message:', payload);
-      callback(payload);
+    // Check async, then subscribe
+    checkSupported().then(supported => {
+      if (!supported) return;
+      const msg = getFirebaseMessaging();
+      if (!msg) return;
+      onMessage(msg, (payload) => {
+        console.log('Foreground message:', payload);
+        callback(payload);
+      });
     });
+    // Return noop unsubscribe since we can't return the real one synchronously
+    return () => {};
   },
 
   getPlatform() {
