@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   ArrowLeft, 
   Search, 
@@ -35,6 +35,7 @@ const AdminConversations = ({ onBack, onSelectConversation, onTeamChat }) => {
   // Archive view
   const [showArchived, setShowArchived] = useState(false);
   const [archivedConversations, setArchivedConversations] = useState([]);
+  const [archivedLoading, setArchivedLoading] = useState(false);
   
   // Online status for all conversation users
   const userIds = conversations.map(c => c.userId).filter(Boolean);
@@ -45,6 +46,8 @@ const AdminConversations = ({ onBack, onSelectConversation, onTeamChat }) => {
   const [actionLoadingId, setActionLoadingId] = useState(null);
   const touchStartX = useRef(0);
   const touchCurrentX = useRef(0);
+  const touchStartY = useRef(0);
+  const isScrolling = useRef(false);
   const swipeThreshold = 70;
 
   useEffect(() => {
@@ -99,6 +102,7 @@ const AdminConversations = ({ onBack, onSelectConversation, onTeamChat }) => {
   };
 
   const fetchArchivedConversations = async () => {
+    setArchivedLoading(true);
     try {
       const token = authService.getToken();
       const res = await fetch(`${API_URL}/admin/conversations?archived=1`, {
@@ -109,6 +113,7 @@ const AdminConversations = ({ onBack, onSelectConversation, onTeamChat }) => {
         setArchivedConversations(data);
       }
     } catch (e) {}
+    setArchivedLoading(false);
   };
 
   const unarchiveConversation = async (convId) => {
@@ -119,6 +124,7 @@ const AdminConversations = ({ onBack, onSelectConversation, onTeamChat }) => {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` }
       });
+      await new Promise(r => setTimeout(r, 400));
       setArchivedConversations(prev => prev.filter(c => c.id !== convId));
       setSwipedId(null);
     } catch (e) {}
@@ -195,6 +201,7 @@ const AdminConversations = ({ onBack, onSelectConversation, onTeamChat }) => {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` }
       });
+      await new Promise(r => setTimeout(r, 400));
       setConversations(prev => prev.filter(c => c.id !== convId));
       setSwipedId(null);
     } catch (error) {
@@ -203,41 +210,103 @@ const AdminConversations = ({ onBack, onSelectConversation, onTeamChat }) => {
     setActionLoadingId(null);
   };
 
-  // Swipe handlers
+  // Ref callback to attach non-passive touchmove for iOS preventDefault
+  const swipeRef = useCallback((node) => {
+    if (!node) return;
+    // Remove old listeners if re-attached
+    if (node._swipeCleanup) node._swipeCleanup();
+
+    const onTouchMove = (e) => {
+      const diffY = Math.abs(e.touches[0].clientY - touchStartY.current);
+      touchCurrentX.current = e.touches[0].clientX;
+      const diffX = Math.abs(touchStartX.current - touchCurrentX.current);
+
+      if (!isScrolling.current && diffY > 10 && diffY > diffX) {
+        isScrolling.current = true;
+      }
+      if (isScrolling.current) {
+        // If was swiping, reset it
+        const el = node.querySelector('.conv-swipe-content');
+        if (el && node.classList.contains('swiping')) {
+          el.style.transform = 'translateX(0)';
+          el.style.transition = 'transform 0.2s ease';
+          node.classList.remove('swiping', 'swipe-left', 'swipe-right');
+        }
+        return;
+      }
+
+      // Horizontal swipe — prevent scroll
+      if (diffX > 10) {
+        e.preventDefault();
+      }
+
+      const diff = touchStartX.current - touchCurrentX.current;
+      const el = node.querySelector('.conv-swipe-content');
+      if (Math.abs(diff) > 10) {
+        node.classList.add('swiping');
+        if (diff > 0) {
+          node.classList.add('swipe-left');
+          node.classList.remove('swipe-right');
+        } else {
+          node.classList.add('swipe-right');
+          node.classList.remove('swipe-left');
+        }
+      }
+      if (el) {
+        if (diff > 0) {
+          el.style.transform = `translateX(-${Math.min(diff, 90)}px)`;
+        } else {
+          el.style.transform = `translateX(${Math.min(Math.abs(diff), 90)}px)`;
+        }
+        el.style.transition = 'none';
+      }
+    };
+
+    node.addEventListener('touchmove', onTouchMove, { passive: false });
+    node._swipeCleanup = () => {
+      node.removeEventListener('touchmove', onTouchMove);
+    };
+  }, [swipedId]);
+
   const handleTouchStart = (e, convId) => {
     touchStartX.current = e.touches[0].clientX;
     touchCurrentX.current = e.touches[0].clientX;
-  };
+    touchStartY.current = e.touches[0].clientY;
+    isScrolling.current = false;
 
-  const handleTouchMove = (e, convId) => {
-    touchCurrentX.current = e.touches[0].clientX;
-    const diff = touchStartX.current - touchCurrentX.current;
-    const wrapper = e.currentTarget;
-    const el = wrapper.querySelector('.conv-swipe-content');
-    if (Math.abs(diff) > 10) {
-      wrapper.classList.add('swiping');
-      // Show correct action based on direction
-      if (diff > 0) {
-        wrapper.classList.add('swipe-left');
-        wrapper.classList.remove('swipe-right');
-      } else {
-        wrapper.classList.add('swipe-right');
-        wrapper.classList.remove('swipe-left');
+    // If this item is already swiped open, close it and block this gesture
+    if (swipedId === convId) {
+      const wrapper = e.currentTarget;
+      const el = wrapper.querySelector('.conv-swipe-content');
+      if (el) {
+        el.style.transform = 'translateX(0)';
+        el.style.transition = 'transform 0.2s ease';
       }
+      wrapper.classList.remove('swiping', 'swipe-left', 'swipe-right');
+      setSwipedId(null);
+      isScrolling.current = true;
+      return;
     }
-    if (el) {
-      if (diff > 0) {
-        // Swipe left (RTL: unread)
-        el.style.transform = `translateX(-${Math.min(diff, 90)}px)`;
-      } else {
-        // Swipe right (RTL: archive)
-        el.style.transform = `translateX(${Math.min(Math.abs(diff), 90)}px)`;
-      }
-      el.style.transition = 'none';
+
+    // If another item is swiped open, close it first
+    if (swipedId) {
+      setSwipedId(null);
+      document.querySelectorAll('.conv-swipe-content').forEach(el => {
+        el.style.transform = 'translateX(0)';
+        el.style.transition = 'transform 0.2s ease';
+      });
+      document.querySelectorAll('.admin-conversation-item-wrapper').forEach(el => {
+        el.classList.remove('swiping', 'swipe-left', 'swipe-right');
+      });
     }
   };
 
   const handleTouchEnd = (e, convId) => {
+    if (isScrolling.current) {
+      isScrolling.current = false;
+      return;
+    }
+
     const diff = touchStartX.current - touchCurrentX.current;
     const wrapper = e.currentTarget;
     const el = wrapper.querySelector('.conv-swipe-content');
@@ -315,21 +384,54 @@ const AdminConversations = ({ onBack, onSelectConversation, onTeamChat }) => {
     const archivedSwipeStart = (e) => {
       touchStartX.current = e.touches[0].clientX;
       touchCurrentX.current = e.touches[0].clientX;
+      touchStartY.current = e.touches[0].clientY;
+      isScrolling.current = false;
     };
-    const archivedSwipeMove = (e) => {
-      touchCurrentX.current = e.touches[0].clientX;
-      const diff = touchStartX.current - touchCurrentX.current;
-      const wrapper = e.currentTarget;
-      const el = wrapper.querySelector('.conv-swipe-content');
-      if (diff < -10) {
-        wrapper.classList.add('swiping', 'swipe-right');
-      }
-      if (el && diff < 0) {
-        el.style.transform = `translateX(${Math.min(Math.abs(diff), 90)}px)`;
-        el.style.transition = 'none';
-      }
+
+    const archivedSwipeRef = (node) => {
+      if (!node) return;
+      if (node._archiveCleanup) node._archiveCleanup();
+
+      const onMove = (e) => {
+        const diffY = Math.abs(e.touches[0].clientY - touchStartY.current);
+        touchCurrentX.current = e.touches[0].clientX;
+        const diffX = Math.abs(touchStartX.current - touchCurrentX.current);
+
+        if (!isScrolling.current && diffY > 10 && diffY > diffX) {
+          isScrolling.current = true;
+        }
+        if (isScrolling.current) {
+          const el = node.querySelector('.conv-swipe-content');
+          if (el && node.classList.contains('swiping')) {
+            el.style.transform = 'translateX(0)';
+            el.style.transition = 'transform 0.2s ease';
+            node.classList.remove('swiping', 'swipe-right');
+          }
+          return;
+        }
+
+        if (diffX > 10) e.preventDefault();
+
+        const diff = touchStartX.current - touchCurrentX.current;
+        const el = node.querySelector('.conv-swipe-content');
+        if (diff < -10) {
+          node.classList.add('swiping', 'swipe-right');
+        }
+        if (el && diff < 0) {
+          el.style.transform = `translateX(${Math.min(Math.abs(diff), 90)}px)`;
+          el.style.transition = 'none';
+        }
+      };
+
+      node.addEventListener('touchmove', onMove, { passive: false });
+      node._archiveCleanup = () => node.removeEventListener('touchmove', onMove);
     };
+
     const archivedSwipeEnd = (e, convId) => {
+      if (isScrolling.current) {
+        isScrolling.current = false;
+        return;
+      }
       const diff = touchStartX.current - touchCurrentX.current;
       const wrapper = e.currentTarget;
       const el = wrapper.querySelector('.conv-swipe-content');
@@ -367,7 +469,12 @@ const AdminConversations = ({ onBack, onSelectConversation, onTeamChat }) => {
         </div>
 
         <div className="admin-conversations-list">
-          {archivedConversations.length === 0 ? (
+          {archivedLoading ? (
+            <div className="admin-loading">
+              <Loader2 size={32} className="spinning" />
+              <span>در حال بارگذاری...</span>
+            </div>
+          ) : archivedConversations.length === 0 ? (
             <div className="admin-empty-state">
               <Archive size={48} />
               <h3>آرشیوی وجود ندارد</h3>
@@ -379,8 +486,8 @@ const AdminConversations = ({ onBack, onSelectConversation, onTeamChat }) => {
                 key={conv.id}
                 className="admin-conversation-item-wrapper"
                 onTouchStart={archivedSwipeStart}
-                onTouchMove={archivedSwipeMove}
                 onTouchEnd={(e) => archivedSwipeEnd(e, conv.id)}
+                ref={archivedSwipeRef}
               >
                 <div className="conv-swipe-action-left" style={{
                   background: 'linear-gradient(135deg, #10b981, #059669)',
@@ -417,6 +524,12 @@ const AdminConversations = ({ onBack, onSelectConversation, onTeamChat }) => {
         </div>
 
         <style>{`
+          .admin-loading {
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            gap: 16px; height: 300px; color: rgba(255,255,255,0.6);
+          }
+          .spinning { animation: spin 1s linear infinite; }
+          @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
           .conv-swipe-action-left {
             position: absolute; top: 0; left: 0; width: 80px; height: 100%;
             display: flex; flex-direction: column; align-items: center; justify-content: center;
@@ -539,8 +652,8 @@ const AdminConversations = ({ onBack, onSelectConversation, onTeamChat }) => {
               key={conv.id}
               className="admin-conversation-item-wrapper"
               onTouchStart={(e) => handleTouchStart(e, conv.id)}
-              onTouchMove={(e) => handleTouchMove(e, conv.id)}
               onTouchEnd={(e) => handleTouchEnd(e, conv.id)}
+              ref={swipeRef}
             >
               {/* Swipe action behind - RIGHT side (unread) */}
               <div className="conv-swipe-action" 

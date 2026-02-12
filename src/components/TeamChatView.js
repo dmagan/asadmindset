@@ -541,7 +541,7 @@ const TeamChatView = ({ conversationId, onBack }) => {
 
   // ─── Typing text ───
   const typingNames = Object.values(typingUsers);
-  const typingText = typingNames.length === 1 ? `${typingNames[0]} در حال نوشتن...` : typingNames.length > 1 ? `${typingNames.join('، ')} در حال نوشتن...` : '';
+  const typingText = typingNames.length === 1 ? `${typingNames[0]} ...در حال نوشتن` : typingNames.length > 1 ? `${typingNames.join('، ')} ...سدر حال نوشتن` : '';
 
   // ─── Get display name for header ───
   const getHeaderTitle = () => {
@@ -570,7 +570,7 @@ const TeamChatView = ({ conversationId, onBack }) => {
           <div className="chat-header-info">
             <div className="chat-header-text">
               <span className="chat-header-title">چت تیمی</span>
-              <span className="chat-header-status">در حال اتصال...</span>
+              <span className="chat-header-status">...در حال اتصال</span>
             </div>
             <div className="chat-avatar-glass"><Users size={20} /></div>
           </div>
@@ -585,7 +585,7 @@ const TeamChatView = ({ conversationId, onBack }) => {
       {/* Header */}
       <div className="chat-header-glass">
         <button className="chat-back-btn" onClick={onBack}><ChevronLeft size={22} /></button>
-        <div className="chat-header-info" style={{ flex: 1, cursor: conversation?.type === 'group' ? 'pointer' : 'default' }} onClick={() => conversation?.type === 'group' && setShowGroupInfo(true)}>
+        <div className="chat-header-info" style={{ flex: 1, justifyContent: 'flex-end', cursor: conversation?.type === 'group' ? 'pointer' : 'default' }} onClick={() => conversation?.type === 'group' && setShowGroupInfo(true)}>
           <div className="chat-header-text">
             <span className="chat-header-title">{getHeaderTitle()}</span>
             <span className="chat-header-status">{typingText || getHeaderSubtitle()}</span>
@@ -797,7 +797,7 @@ const TeamChatView = ({ conversationId, onBack }) => {
             </div>
           )}
           {isRecording ? (
-            <div className="recording-indicator"><div className="recording-dot"></div><span className="recording-time">{fmtDuration(recordingTime)}</span><span className="recording-text">در حال ضبط...</span></div>
+            <div className="recording-indicator"><div className="recording-dot"></div><span className="recording-time">{fmtDuration(recordingTime)}</span><span className="recording-text">...در حال ضبط</span></div>
           ) : (
             <textarea ref={inputRef} placeholder="پیام خود را بنویسید..." value={newMessage} onChange={handleInputChange} onBlur={() => sendTypingIndicator(false)} onKeyDown={handleKeyDown} className="chat-input-glass" rows={1} disabled={uploadingVideo} />
           )}
