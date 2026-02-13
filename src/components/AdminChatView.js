@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, ArrowLeft, Headphones, Trash2, Edit3, X, Paperclip, Mic, Square, Play, Pause, Check, CheckCheck, Reply, CornerDownLeft, ArrowDown, Video, Image, Loader2, ChevronLeft, User, MailOpen } from 'lucide-react';
+import { Send, ArrowLeft, Headphones, Trash2, Edit3, X, Paperclip, Mic, Square, Play, Pause, Check, CheckCheck, Reply, CornerDownLeft, ArrowDown, Video, Image, Loader2, ChevronLeft, User, MailOpen, Copy } from 'lucide-react';
 import Pusher from 'pusher-js';
 import { authService } from '../services/authService';
 import ImageZoomModal from './ImageZoomModal';
@@ -1395,6 +1395,15 @@ useEffect(() => {
             <Reply size={18} />
             <span>Reply</span>
           </button>
+          {selectedMessage?.text && (
+            <button className="menu-item-btn"
+              onTouchEnd={(e) => { e.preventDefault(); e.stopPropagation(); navigator.clipboard.writeText(selectedMessage.text); setShowMenu(false); setSelectedMessage(null); }}
+              onClick={() => { navigator.clipboard.writeText(selectedMessage.text); setShowMenu(false); setSelectedMessage(null); }}
+            >
+              <Copy size={18} />
+              <span>کپی</span>
+            </button>
+          )}
           {selectedMessage?.sender === 'user' && !selectedMessage?.image && !selectedMessage?.audio && (
             <button className="menu-item-btn" 
               onTouchEnd={(e) => { e.preventDefault(); e.stopPropagation(); handleEdit(e); }}

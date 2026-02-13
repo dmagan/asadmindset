@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, ArrowLeft, Trash2, Edit3, X, Paperclip, Mic, Square, Play, Pause, Check, CheckCheck, Reply, CornerDownLeft, ArrowDown, Video, Image, Loader2, ChevronLeft, User, Users, UserPlus, LogOut, Settings } from 'lucide-react';
+import { Send, ArrowLeft, Trash2, Edit3, X, Paperclip, Mic, Square, Play, Pause, Check, CheckCheck, Reply, CornerDownLeft, ArrowDown, Video, Image, Loader2, ChevronLeft, User, Users, UserPlus, LogOut, Settings, Copy, Languages } from 'lucide-react';
 import Pusher from 'pusher-js';
 import { authService } from '../services/authService';
 import ImageZoomModal from './ImageZoomModal';
@@ -74,6 +74,16 @@ const TeamChatView = ({ conversationId, onBack, onUnreadCountChange }) => {
   // Scroll
   const [highlightedMessageId, setHighlightedMessageId] = useState(null);
   const [showScrollButton, setShowScrollButton] = useState(false);
+  const [showFlagMenu, setShowFlagMenu] = useState(false);
+  const [selectedFlag, setSelectedFlag] = useState(() => {
+    try { const s = localStorage.getItem('teamchat_flag'); const f = s ? JSON.parse(s) : null; return f; } catch { return null; }
+  });
+  const [translatingIds, setTranslatingIds] = useState(new Set());
+  const flagMenuRef = useRef(null);
+  const selectedFlagRef = useRef((() => {
+    try { const s = localStorage.getItem('teamchat_flag'); return s ? JSON.parse(s) : null; } catch { return null; }
+  })());
+  const flagLangMapRef = useRef({ IR: 'fa', CH: 'de', DE: 'de', FR: 'fr', GB: 'en', ES: 'es' });
 
   // Unread tracking
   const [chatUnreadCount, setChatUnreadCount] = useState(0);
@@ -184,6 +194,9 @@ const TeamChatView = ({ conversationId, onBack, onUnreadCountChange }) => {
         return {
           id: msg.id,
           text: msg.type === 'text' ? msg.content : null,
+          translatedText: msg.translatedContent || null,
+          originalText: msg.type === 'text' ? msg.content : null,
+          senderLang: msg.senderLang || 'fa',
           image: msg.type === 'image' ? msg.mediaUrl : null,
           video: msg.type === 'video' ? msg.mediaUrl : null,
           audio: msg.type === 'audio' ? msg.mediaUrl : null,
@@ -194,6 +207,7 @@ const TeamChatView = ({ conversationId, onBack, onUnreadCountChange }) => {
           time: fmtTime(msg.createdAt),
           edited: msg.isEdited,
           status,
+          showOriginal: false,
           replyTo: msg.replyTo ? {
             id: msg.replyTo.id, type: msg.replyTo.type,
             content: msg.replyTo.type === 'text' ? msg.replyTo.content : msg.replyTo.type === 'image' ? '📷 تصویر' : msg.replyTo.type === 'video' ? '🎬 ویدیو' : '🎤 صوتی',
@@ -203,6 +217,28 @@ const TeamChatView = ({ conversationId, onBack, onUnreadCountChange }) => {
         };
       }));
       connectPusher();
+
+      // Lazy translate: if user has non-Persian flag, translate Persian messages that don't have translation yet
+      const myLang = selectedFlagRef.current ? flagLangMapRef.current[selectedFlagRef.current.code] : 'fa';
+      if (myLang !== 'fa') {
+        const needTranslation = data.messages.filter(m => 
+          m.senderId !== currentUserId && m.type === 'text' && m.content && 
+          m.senderLang === 'fa' && !m.translatedContent
+        );
+        needTranslation.forEach(msg => {
+          translateText(msg.content, myLang).then(translated => {
+            if (translated && translated !== msg.content) {
+              setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, translatedText: translated } : m));
+              // Save to server for future loads
+              const token = authService.getToken();
+              fetch(`${API_URL}/team/messages/${msg.id}/translation`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({ translatedContent: translated })
+              }).catch(() => {});
+            }
+          });
+        });
+      }
       
       // Calculate unread
       const unreadN = data.conversation.unreadCount || 0;
@@ -304,15 +340,37 @@ const TeamChatView = ({ conversationId, onBack, onUnreadCountChange }) => {
         if (prev.some(m => m.id === data.id)) return prev;
         return [...prev, {
           id: data.id, text: data.type === 'text' ? data.content : null,
+          translatedText: data.translatedContent || null,
+          originalText: data.type === 'text' ? data.content : null,
+          senderLang: data.senderLang || 'fa',
           image: data.type === 'image' ? data.mediaUrl : null, video: data.type === 'video' ? data.mediaUrl : null,
           audio: data.type === 'audio' ? data.mediaUrl : null, duration: data.duration || 0,
           senderId: data.senderId, senderName: data.senderName,
           sender: 'support',
-          time: fmtTime(data.createdAt), edited: false, status: 'sent',
+          time: fmtTime(data.createdAt), edited: false, status: 'sent', showOriginal: false,
           replyTo: data.replyTo ? { id: data.replyTo.id, type: data.replyTo.type, content: data.replyTo.content, sender: data.replyTo.senderId === currentUserId ? 'user' : 'support', senderName: data.replyTo.senderName } : null
         }];
       });
       playSound(); markAsRead();
+
+      // Lazy translate if Persian message received and user is non-Persian, and no translation provided
+      if (data.type === 'text' && data.content && !data.translatedContent) {
+        const myLang = selectedFlagRef.current ? flagLangMapRef.current[selectedFlagRef.current.code] : 'fa';
+        const msgLang = data.senderLang || 'fa';
+        if (myLang !== 'fa' && msgLang === 'fa') {
+          translateText(data.content, myLang).then(translated => {
+            if (translated && translated !== data.content) {
+              setMessages(prev => prev.map(m => m.id === data.id ? { ...m, translatedText: translated } : m));
+              // Save for future
+              const token = authService.getToken();
+              fetch(`${API_URL}/team/messages/${data.id}/translation`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({ translatedContent: translated })
+              }).catch(() => {});
+            }
+          });
+        }
+      }
     });
 
     channelRef.current.bind('message-edited', (d) => setMessages(p => p.map(m => m.id === d.id ? { ...m, text: d.content, edited: true } : m)));
@@ -452,6 +510,23 @@ const TeamChatView = ({ conversationId, onBack, onUnreadCountChange }) => {
   };
 
   // ─── Send ───
+  // Language codes for flags
+  const flagLangMap = { IR: 'fa', CH: 'de', DE: 'de', FR: 'fr', GB: 'en', ES: 'es' };
+
+  const translateText = async (text, targetLang) => {
+    try {
+      const token = authService.getToken();
+      const res = await fetch(`${API_URL}/translate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ text, targetLang })
+      });
+      if (!res.ok) return text;
+      const data = await res.json();
+      return data.translated || text;
+    } catch (e) { return text; }
+  };
+
   const handleSend = async () => {
     const txt = newMessage.trim();
     if (!txt) return;
@@ -466,10 +541,11 @@ const TeamChatView = ({ conversationId, onBack, onUnreadCountChange }) => {
     pendingTempIds.current.add(tempId);
 
     try {
+      const userLang = selectedFlag ? flagLangMap[selectedFlag.code] : 'fa';
       const token = authService.getToken();
       const res = await fetch(`${API_URL}/team/conversations/${conversationId}/message`, {
         method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({ type: 'text', content: txt, replyToId: reply?.id })
+        body: JSON.stringify({ type: 'text', content: txt, replyToId: reply?.id, senderLang: userLang })
       });
       if (!res.ok) throw new Error('Failed');
       const data = await res.json();
@@ -657,11 +733,43 @@ const TeamChatView = ({ conversationId, onBack, onUnreadCountChange }) => {
     );
   }
 
+  // Country flag menu
+  const flags = [
+    { code: 'IR', emoji: '🇮🇷', name: 'ایران' },
+    { code: 'CH', emoji: '🇨🇭', name: 'سوئیس' },
+    { code: 'DE', emoji: '🇩🇪', name: 'آلمان' },
+    { code: 'FR', emoji: '🇫🇷', name: 'فرانسه' },
+    { code: 'GB', emoji: '🇬🇧', name: 'انگلیس' },
+    { code: 'ES', emoji: '🇪🇸', name: 'اسپانیا' },
+  ];
+
   return (
     <div className="support-chat-container">
       {/* Header */}
       <div className="chat-header-glass">
         <button className="chat-back-btn" onClick={handleBack}><ChevronLeft size={22} /></button>
+        
+        {/* Country flag selector */}
+        <button
+          onTouchEnd={(e) => { e.preventDefault(); setShowFlagMenu(prev => !prev); }}
+          onClick={() => setShowFlagMenu(prev => !prev)}
+          style={{
+            background: 'rgba(255,255,255,0.15)',
+            border: '1px solid rgba(255,255,255,0.3)',
+            borderRadius: '12px',
+            padding: '6px 10px',
+            fontSize: '20px',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            backdropFilter: 'blur(4px)',
+            WebkitBackdropFilter: 'blur(4px)',
+            WebkitTapHighlightColor: 'transparent',
+          }}
+        >
+          {selectedFlag ? selectedFlag.emoji : '🌐'}
+        </button>
+
         <div className="chat-header-info" style={{ flex: 1, justifyContent: 'flex-end', cursor: conversation?.type === 'group' ? 'pointer' : 'default' }} onClick={() => conversation?.type === 'group' && setShowGroupInfo(true)}>
           <div className="chat-header-text">
             <span className="chat-header-title">{getHeaderTitle()}</span>
@@ -672,6 +780,53 @@ const TeamChatView = ({ conversationId, onBack, onUnreadCountChange }) => {
           </div>
         </div>
       </div>
+
+      {/* Flag dropdown overlay */}
+      {showFlagMenu && (
+        <>
+          <div onTouchEnd={() => setShowFlagMenu(false)} onClick={() => setShowFlagMenu(false)} style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 9998 }} />
+          <div style={{
+            position: 'fixed',
+            top: '85px',
+            left: '55px',
+            background: 'rgba(30,30,30,0.97)',
+            backdropFilter: 'blur(20px)',
+            WebkitBackdropFilter: 'blur(20px)',
+            border: '1px solid rgba(255,255,255,0.2)',
+            borderRadius: '16px',
+            padding: '8px',
+            zIndex: 9999,
+            minWidth: '150px',
+            boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+          }}>
+            {flags.map(flag => (
+              <button
+                key={flag.code}
+                onTouchEnd={(e) => { e.preventDefault(); e.stopPropagation(); setSelectedFlag(flag); selectedFlagRef.current = flag; localStorage.setItem('teamchat_flag', JSON.stringify(flag)); setShowFlagMenu(false); }}
+                onClick={() => { setSelectedFlag(flag); selectedFlagRef.current = flag; localStorage.setItem('teamchat_flag', JSON.stringify(flag)); setShowFlagMenu(false); }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '10px',
+                  width: '100%',
+                  padding: '10px 12px',
+                  background: selectedFlag?.code === flag.code ? 'rgba(99,102,241,0.3)' : 'transparent',
+                  border: 'none',
+                  borderRadius: '10px',
+                  color: 'white',
+                  fontSize: '14px',
+                  cursor: 'pointer',
+                  direction: 'rtl',
+                  WebkitTapHighlightColor: 'transparent',
+                }}
+              >
+                <span style={{ fontSize: '22px' }}>{flag.emoji}</span>
+                <span>{flag.name}</span>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
 
       {/* Messages */}
       <div className="chat-messages-area" ref={messagesAreaRef} onScroll={handleScroll}>
@@ -684,9 +839,12 @@ const TeamChatView = ({ conversationId, onBack, onUnreadCountChange }) => {
                 <div style={{flex:1,height:'1px',background:'rgba(0,0,0,0.25)'}} />
               </div>
             )}
+          {/* Flex wrapper for translation toggle */}
+          <div style={msg.sender !== 'user' && msg.translatedText ? { display: 'flex', alignItems: 'center', gap: '6px', alignSelf: 'flex-start', maxWidth: '85%' } : { display: 'contents' }}>
           <div
             ref={el => messageRefs.current[msg.id] = el}
             className={`chat-bubble-glass ${msg.sender === 'user' ? 'user-bubble' : 'support-bubble'} ${selectedMessage?.id === msg.id ? 'selected' : ''} ${msg.image ? 'image-bubble' : ''} ${msg.audio ? 'audio-bubble' : ''} ${highlightedMessageId === msg.id ? 'highlighted' : ''}`}
+            style={msg.sender !== 'user' && msg.translatedText ? { alignSelf: 'auto', maxWidth: '100%' } : undefined}
             onTouchStart={(e) => handleTouchStart(e, msg)}
             onTouchEnd={handleTouchEnd}
             onTouchMove={handleTouchMove}
@@ -780,7 +938,14 @@ const TeamChatView = ({ conversationId, onBack, onUnreadCountChange }) => {
                 />
               </div>
             ) : (
-              <span className="bubble-text">{msg.text}</span>
+              <span className="bubble-text">{(() => {
+                if (msg.sender === 'user') return msg.text;
+                const myLang = selectedFlag ? flagLangMap[selectedFlag.code] : 'fa';
+                const msgLang = msg.senderLang || 'fa';
+                if (msgLang === myLang) return msg.text;
+                if (msg.translatedText && !msg.showOriginal) return msg.translatedText;
+                return msg.text;
+              })()}</span>
             )}
 
             <span className="bubble-time">
@@ -798,6 +963,25 @@ const TeamChatView = ({ conversationId, onBack, onUnreadCountChange }) => {
               <span style={{ display: 'block', fontSize: '10px', color: 'hsla(0,0%,50%,1)', marginTop: 2, fontWeight: 600 }}>{msg.senderName}</span>
             )}
           </div>
+          {msg.sender !== 'user' && msg.translatedText && (
+            <button
+              onTouchEnd={(e) => { e.preventDefault(); e.stopPropagation(); setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, showOriginal: !m.showOriginal } : m)); }}
+              onClick={(e) => { e.stopPropagation(); setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, showOriginal: !m.showOriginal } : m)); }}
+              style={{
+                background: 'none',
+                border: 'none',
+                padding: '4px',
+                cursor: 'pointer',
+                color: msg.showOriginal ? 'rgba(99,102,241,0.9)' : 'rgba(255,255,255,0.3)',
+                WebkitTapHighlightColor: 'transparent',
+                transition: 'color 0.2s',
+                flexShrink: 0,
+              }}
+            >
+              <Languages size={15} />
+            </button>
+          )}
+          </div>
           </React.Fragment>
         ))}
         <div ref={messagesEndRef} />
@@ -807,6 +991,9 @@ const TeamChatView = ({ conversationId, onBack, onUnreadCountChange }) => {
       {showMenu && selectedMessage && (
         <div className="message-menu-glass" style={{ top: `${menuPosition.y}px` }} onMouseDown={e => e.stopPropagation()} onTouchStart={e => e.stopPropagation()} onClick={e => e.stopPropagation()}>
           <button className="menu-item-btn" onTouchEnd={(e) => { e.preventDefault(); e.stopPropagation(); handleReply(selectedMessage); }} onClick={() => handleReply(selectedMessage)}><Reply size={18} /><span>Reply</span></button>
+          {selectedMessage?.text && (
+            <button className="menu-item-btn" onTouchEnd={(e) => { e.preventDefault(); e.stopPropagation(); navigator.clipboard.writeText(selectedMessage.text); setShowMenu(false); setSelectedMessage(null); }} onClick={() => { navigator.clipboard.writeText(selectedMessage.text); setShowMenu(false); setSelectedMessage(null); }}><Copy size={18} /><span>کپی</span></button>
+          )}
           {selectedMessage?.sender === 'user' && !selectedMessage?.image && !selectedMessage?.audio && (
             <button className="menu-item-btn" onTouchEnd={(e) => { e.preventDefault(); e.stopPropagation(); handleEdit(e); }} onClick={handleEdit}><Edit3 size={18} /><span>ویرایش</span></button>
           )}
