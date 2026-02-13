@@ -32,6 +32,17 @@ class AsadMindset_TeamChat {
         $table = $wpdb->prefix . 'team_conversations';
         if ($wpdb->get_var("SHOW TABLES LIKE '$table'") != $table) {
             $this->create_tables();
+        } else {
+            // Run migrations for new columns on existing tables
+            $t3 = $wpdb->prefix . 'team_messages';
+            $col = $wpdb->get_results("SHOW COLUMNS FROM $t3 LIKE 'translated_content'");
+            if (empty($col)) {
+                $wpdb->query("ALTER TABLE $t3 ADD COLUMN translated_content text DEFAULT NULL AFTER reply_to_id");
+            }
+            $col2 = $wpdb->get_results("SHOW COLUMNS FROM $t3 LIKE 'sender_lang'");
+            if (empty($col2)) {
+                $wpdb->query("ALTER TABLE $t3 ADD COLUMN sender_lang varchar(5) DEFAULT 'fa' AFTER translated_content");
+            }
         }
     }
     
@@ -81,6 +92,8 @@ class AsadMindset_TeamChat {
             duration int(11) DEFAULT 0,
             is_edited tinyint(1) DEFAULT 0,
             reply_to_id bigint(20) DEFAULT NULL,
+            translated_content text DEFAULT NULL,
+            sender_lang varchar(5) DEFAULT 'fa',
             created_at datetime DEFAULT CURRENT_TIMESTAMP,
             updated_at datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             PRIMARY KEY (id),
@@ -92,6 +105,17 @@ class AsadMindset_TeamChat {
         dbDelta($sql1);
         dbDelta($sql2);
         dbDelta($sql3);
+        
+        // Add translated_content column if not exists
+        $t3 = $wpdb->prefix . 'team_messages';
+        $col = $wpdb->get_results("SHOW COLUMNS FROM $t3 LIKE 'translated_content'");
+        if (empty($col)) {
+            $wpdb->query("ALTER TABLE $t3 ADD COLUMN translated_content text DEFAULT NULL AFTER reply_to_id");
+        }
+        $col2 = $wpdb->get_results("SHOW COLUMNS FROM $t3 LIKE 'sender_lang'");
+        if (empty($col2)) {
+            $wpdb->query("ALTER TABLE $t3 ADD COLUMN sender_lang varchar(5) DEFAULT 'fa' AFTER translated_content");
+        }
     }
     
     // ─── Auth Helpers ─────────────────────────────────────────────────────
@@ -270,6 +294,20 @@ class AsadMindset_TeamChat {
         register_rest_route($ns, '/team/conversations/(?P<id>\d+)/leave', [
             'methods'  => 'POST',
             'callback' => [$this, 'leave_conversation'],
+            'permission_callback' => [$this, 'check_team_auth'],
+        ]);
+
+        // Translate message via ChatGPT
+        register_rest_route($ns, '/translate', [
+            'methods'  => 'POST',
+            'callback' => [$this, 'translate_message'],
+            'permission_callback' => [$this, 'check_team_auth'],
+        ]);
+
+        // Save translation for a message (lazy cache)
+        register_rest_route($ns, '/team/messages/(?P<id>\d+)/translation', [
+            'methods'  => 'POST',
+            'callback' => [$this, 'save_translation'],
             'permission_callback' => [$this, 'check_team_auth'],
         ]);
     }
@@ -513,6 +551,8 @@ class AsadMindset_TeamChat {
                 'id'         => (int) $msg->id,
                 'type'       => $msg->message_type,
                 'content'    => $msg->content,
+                'translatedContent' => property_exists($msg, 'translated_content') ? $msg->translated_content : null,
+                'senderLang'  => property_exists($msg, 'sender_lang') ? ($msg->sender_lang ?? 'fa') : 'fa',
                 'mediaUrl'   => $msg->media_url,
                 'duration'   => (int) $msg->duration,
                 'senderId'   => (int) $msg->sender_id,
@@ -577,17 +617,36 @@ class AsadMindset_TeamChat {
         $t_conv = $wpdb->prefix . 'team_conversations';
         $t_members = $wpdb->prefix . 'team_conversation_members';
         
+        // Translate if sender is non-Persian
+        $sender_lang = isset($params['senderLang']) ? $params['senderLang'] : 'fa';
+        $content = isset($params['content']) ? $params['content'] : '';
+        $translated_content = null;
+        
+        if ($sender_lang !== 'fa' && !empty($content) && (!isset($params['type']) || $params['type'] === 'text')) {
+            // Non-Persian sender: translate to Persian so Persian speakers can read
+            $translated_content = $this->do_translate($content, 'fa');
+        }
+        
         // Insert message
-        $wpdb->insert($t_msgs, [
+        $insert_data = [
             'conversation_id' => $conv_id,
             'sender_id'       => $uid,
             'message_type'    => isset($params['type']) ? $params['type'] : 'text',
-            'content'         => isset($params['content']) ? $params['content'] : '',
+            'content'         => $content,
             'media_url'       => isset($params['mediaUrl']) ? $params['mediaUrl'] : null,
             'duration'        => isset($params['duration']) ? (int) $params['duration'] : 0,
             'reply_to_id'     => isset($params['replyToId']) ? (int) $params['replyToId'] : null,
             'created_at'      => gmdate('Y-m-d H:i:s'),
-        ]);
+        ];
+        
+        // Only add new fields if columns exist
+        $has_translation_col = $wpdb->get_results("SHOW COLUMNS FROM $t_msgs LIKE 'translated_content'");
+        if (!empty($has_translation_col)) {
+            $insert_data['translated_content'] = $translated_content;
+            $insert_data['sender_lang'] = $sender_lang;
+        }
+        
+        $wpdb->insert($t_msgs, $insert_data);
         $msg_id = $wpdb->insert_id;
         
         // Update conversation timestamp
@@ -624,7 +683,9 @@ class AsadMindset_TeamChat {
         $pusher_message = [
             'id'             => $msg_id,
             'type'           => isset($params['type']) ? $params['type'] : 'text',
-            'content'        => isset($params['content']) ? $params['content'] : '',
+            'content'        => $content,
+            'translatedContent' => $translated_content,
+            'senderLang'     => $sender_lang,
             'mediaUrl'       => isset($params['mediaUrl']) ? $params['mediaUrl'] : null,
             'duration'       => isset($params['duration']) ? (int) $params['duration'] : 0,
             'senderId'       => $uid,
@@ -982,6 +1043,125 @@ class AsadMindset_TeamChat {
         ]);
         
         return new WP_REST_Response(['success' => true], 200);
+    }
+
+    /**
+     * POST /team/messages/{id}/translation — Save lazy translation
+     */
+    public function save_translation($request) {
+        global $wpdb;
+        $msg_id = (int) $request->get_param('id');
+        $params = $request->get_json_params();
+        $translated = $params['translatedContent'] ?? '';
+        
+        if (empty($translated)) {
+            return new WP_REST_Response(['error' => 'No translation'], 400);
+        }
+        
+        $t_msgs = $wpdb->prefix . 'team_messages';
+        $wpdb->update($t_msgs, 
+            ['translated_content' => $translated], 
+            ['id' => $msg_id]
+        );
+        
+        return new WP_REST_Response(['success' => true], 200);
+    }
+
+    private function do_translate($text, $target_lang) {
+        $lang_names = [
+            'fa' => 'Persian (Farsi)', 'de' => 'German', 'fr' => 'French',
+            'en' => 'English', 'es' => 'Spanish',
+        ];
+        $lang_name = $lang_names[$target_lang] ?? 'Persian (Farsi)';
+        $api_key = get_option('asadmindset_chatgpt_api_key', '');
+        if (empty($api_key)) return null;
+        
+        $response = wp_remote_post('https://api.openai.com/v1/chat/completions', [
+            'timeout' => 15,
+            'headers' => [
+                'Content-Type'  => 'application/json',
+                'Authorization' => 'Bearer ' . $api_key,
+            ],
+            'body' => json_encode([
+                'model' => 'gpt-4o-mini',
+                'messages' => [
+                    ['role' => 'system', 'content' => "You are a translator. Translate the following text to {$lang_name}. If the text is already in {$lang_name}, return it unchanged. Return ONLY the translated text, nothing else. No quotes, no explanation, no notes."],
+                    ['role' => 'user', 'content' => $text]
+                ],
+                'max_tokens' => 1000,
+                'temperature' => 0.1,
+            ]),
+        ]);
+        
+        if (is_wp_error($response)) return null;
+        $body = json_decode(wp_remote_retrieve_body($response), true);
+        $translated = $body['choices'][0]['message']['content'] ?? null;
+        return $translated ? trim($translated) : null;
+    }
+
+    public function translate_message($request) {
+        $params = $request->get_json_params();
+        $text = $params['text'] ?? '';
+        $target_lang = $params['targetLang'] ?? 'fa';
+        
+        if (empty($text)) {
+            return new WP_REST_Response(['error' => 'No text provided'], 400);
+        }
+        
+        $lang_names = [
+            'fa' => 'Persian (Farsi)',
+            'de' => 'German',
+            'fr' => 'French',
+            'en' => 'English',
+            'es' => 'Spanish',
+        ];
+        
+        $lang_name = $lang_names[$target_lang] ?? 'Persian (Farsi)';
+        
+        // ChatGPT API key - stored in wp_options
+        $api_key = get_option('asadmindset_chatgpt_api_key', '');
+        if (empty($api_key)) {
+            return new WP_REST_Response(['error' => 'API key not configured'], 500);
+        }
+        
+        $response = wp_remote_post('https://api.openai.com/v1/chat/completions', [
+            'timeout' => 15,
+            'headers' => [
+                'Content-Type'  => 'application/json',
+                'Authorization' => 'Bearer ' . $api_key,
+            ],
+            'body' => json_encode([
+                'model' => 'gpt-4o-mini',
+                'messages' => [
+                    [
+                        'role' => 'system',
+                        'content' => "You are a translator. Translate the following text to {$lang_name}. If the text is already in {$lang_name}, return it unchanged. Return ONLY the translated text, nothing else. No quotes, no explanation, no notes."
+                    ],
+                    [
+                        'role' => 'user',
+                        'content' => $text
+                    ]
+                ],
+                'max_tokens' => 1000,
+                'temperature' => 0.1,
+            ]),
+        ]);
+        
+        if (is_wp_error($response)) {
+            return new WP_REST_Response(['error' => 'Translation failed'], 500);
+        }
+        
+        $body = json_decode(wp_remote_retrieve_body($response), true);
+        $translated = $body['choices'][0]['message']['content'] ?? null;
+        
+        if (!$translated) {
+            return new WP_REST_Response(['error' => 'Empty translation'], 500);
+        }
+        
+        return new WP_REST_Response([
+            'success' => true,
+            'translated' => trim($translated),
+        ], 200);
     }
 }
 
