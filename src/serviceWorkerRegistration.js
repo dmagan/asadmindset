@@ -6,6 +6,9 @@ const isLocalhost = Boolean(
   )
 );
 
+// Flag to prevent infinite reload loops
+let isReloading = false;
+
 export function register(config) {
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
@@ -17,6 +20,17 @@ export function register(config) {
         registerValidSW(swUrl, config);
       }
     });
+
+    // گوش بده به پیام SW_UPDATED از Service Worker
+    navigator.serviceWorker.addEventListener('message', (event) => {
+      if (event.data && event.data.type === 'SW_UPDATED') {
+        console.log(`[App] SW updated to version ${event.data.version}, reloading...`);
+        if (!isReloading) {
+          isReloading = true;
+          window.location.reload();
+        }
+      }
+    });
   }
 }
 
@@ -24,6 +38,18 @@ function registerValidSW(swUrl, config) {
   navigator.serviceWorker
     .register(swUrl)
     .then(registration => {
+      // هر 60 ثانیه چک کن آپدیت جدید هست یا نه
+      setInterval(() => {
+        registration.update();
+      }, 60 * 1000);
+
+      // وقتی اپ دوباره visible میشه هم چک کن
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+          registration.update();
+        }
+      });
+
       registration.onupdatefound = () => {
         const installingWorker = registration.installing;
         if (installingWorker == null) return;
@@ -31,7 +57,8 @@ function registerValidSW(swUrl, config) {
         installingWorker.onstatechange = () => {
           if (installingWorker.state === 'installed') {
             if (navigator.serviceWorker.controller) {
-              console.log('🔄 New version available');
+              // نسخه جدید آماده‌ست - SW خودش رفرش می‌کنه via postMessage
+              console.log('🔄 New version available, waiting for SW activation...');
             } else {
               console.log('✅ App cached for offline use');
             }

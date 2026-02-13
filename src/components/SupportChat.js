@@ -10,7 +10,7 @@ const API_URL = 'https://asadmindset.com/wp-json/asadmindset/v1';
 const PUSHER_KEY = '71815fd9e2b90f89a57b';
 const PUSHER_CLUSTER = 'eu';
 
-const SupportChat = ({ onBack, onMessagesRead }) => {
+const SupportChat = ({ onBack, onMessagesRead, onUnreadCountChange }) => {
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(true);
@@ -74,6 +74,13 @@ useEffect(() => {
   // Scroll to bottom button
   const [showScrollButton, setShowScrollButton] = useState(false);
   
+  // Unread tracking
+  const [chatUnreadCount, setChatUnreadCount] = useState(0);
+  const firstUnreadMsgIdRef = useRef(null);
+  const observerReadyRef = useRef(false);
+  const initialScrollDoneRef = useRef(false);
+  const observerRef = useRef(null);
+  
   // Refs
   const messagesEndRef = useRef(null);
   const messagesAreaRef = useRef(null);
@@ -132,18 +139,20 @@ useEffect(() => {
     };
   }, []);
 
-  // Mark admin messages as read when chat is open (only once when loaded)
+  // Mark admin messages as read - now handled progressively via IntersectionObserver
+  // Old auto-mark disabled to allow progressive badge decrease
   const hasMarkedAsRead = useRef(false);
   
-  useEffect(() => {
-    if (conversationId && messages.length > 0 && !hasMarkedAsRead.current) {
-      const unreadAdminMessages = messages.filter(m => m.sender === 'support' && m.status !== 'read');
-      if (unreadAdminMessages.length > 0) {
-        hasMarkedAsRead.current = true;
-        markMessagesAsRead();
-      }
-    }
-  }, [messages, conversationId]);
+  // Old auto mark-as-read disabled:
+  // useEffect(() => {
+  //   if (conversationId && messages.length > 0 && !hasMarkedAsRead.current) {
+  //     const unreadAdminMessages = messages.filter(m => m.sender === 'support' && m.status !== 'read');
+  //     if (unreadAdminMessages.length > 0) {
+  //       hasMarkedAsRead.current = true;
+  //       markMessagesAsRead();
+  //     }
+  //   }
+  // }, [messages, conversationId]);
 
   const markMessagesAsRead = async () => {
     try {
@@ -200,6 +209,13 @@ useEffect(() => {
       setConversationId(data.conversationId);
       connectPusher(data.pusherChannel);
       
+      // Calculate unread for progressive tracking
+      const unreadMsgs = formattedMessages.filter(m => m.sender === 'support' && m.status !== 'read');
+      setChatUnreadCount(unreadMsgs.length);
+      if (unreadMsgs.length > 0) {
+        firstUnreadMsgIdRef.current = unreadMsgs[0].id;
+      }
+      
     } catch (error) {
       console.error('Error loading conversation:', error);
       setMessages([{
@@ -212,6 +228,92 @@ useEffect(() => {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Scroll to first unread message after load
+  useEffect(() => {
+    if (!loading && messages.length > 0 && !initialScrollDoneRef.current) {
+      initialScrollDoneRef.current = true;
+      observerReadyRef.current = false;
+      setTimeout(() => {
+        if (firstUnreadMsgIdRef.current) {
+          const divider = document.getElementById('unread-divider');
+          if (divider) divider.scrollIntoView({ behavior: 'auto', block: 'start' });
+          setTimeout(() => { observerReadyRef.current = true; }, 600);
+          return;
+        }
+        messagesEndRef.current?.scrollIntoView({ behavior: 'auto' });
+        observerReadyRef.current = true;
+      }, 150);
+    }
+  }, [loading, messages.length]);
+
+  // IntersectionObserver for progressive mark-as-read
+  useEffect(() => {
+    if (loading || messages.length === 0) return;
+    if (observerRef.current) observerRef.current.disconnect();
+    const observer = new IntersectionObserver((entries) => {
+      if (!observerReadyRef.current) return;
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          const msgId = parseInt(entry.target.dataset.msgId);
+          const msg = messages.find(m => m.id === msgId);
+          if (msg && msg.sender === 'support' && msg.status !== 'read') {
+            setMessages(prev => prev.map(m => m.id === msgId ? { ...m, status: 'read' } : m));
+            setChatUnreadCount(prev => {
+              const n = Math.max(0, prev - 1);
+              if (onUnreadCountChange) onUnreadCountChange(n);
+              return n;
+            });
+            observer.unobserve(entry.target);
+          }
+        }
+      });
+    }, { root: messagesAreaRef.current, threshold: 0.5 });
+    observerRef.current = observer;
+    messages.forEach(msg => {
+      if (msg.sender === 'support' && msg.status !== 'read') {
+        const el = messageRefs.current[msg.id];
+        if (el) { el.dataset.msgId = msg.id; observer.observe(el); }
+      }
+    });
+    return () => observer.disconnect();
+  }, [loading, messages, onUnreadCountChange]);
+
+  // Debounced server sync
+  const markReadTimerRef = useRef(null);
+  const prevUnreadRef = useRef(-1);
+  useEffect(() => {
+    // Only sync when count decreased (user saw messages), not on initial load
+    if (prevUnreadRef.current === -1) {
+      prevUnreadRef.current = chatUnreadCount;
+      return;
+    }
+    if (chatUnreadCount >= prevUnreadRef.current) {
+      prevUnreadRef.current = chatUnreadCount;
+      return;
+    }
+    prevUnreadRef.current = chatUnreadCount;
+    
+    if (markReadTimerRef.current) clearTimeout(markReadTimerRef.current);
+    
+    const delay = chatUnreadCount === 0 ? 0 : 500;
+    markReadTimerRef.current = setTimeout(() => {
+      if (conversationId) {
+        authService.authenticatedFetch(`${API_URL}/conversation/read`, { method: 'POST' }).catch(() => {});
+      }
+    }, delay);
+    return () => { if (markReadTimerRef.current) clearTimeout(markReadTimerRef.current); };
+  }, [chatUnreadCount, conversationId]);
+
+  // Handle back - sync before leaving
+  const handleBack = async () => {
+    if (markReadTimerRef.current) clearTimeout(markReadTimerRef.current);
+    if (conversationId) {
+      try { await authService.authenticatedFetch(`${API_URL}/conversation/read`, { method: 'POST' }); } catch (e) {}
+    }
+    if (onMessagesRead) onMessagesRead();
+    onBack();
   };
 
   const connectPusher = (channelName) => {
@@ -254,17 +356,23 @@ useEffect(() => {
     });
     
     // Messages read by admin
+    // Track read message IDs that arrived before optimistic update resolved
+    const readByAdminIdsRef = useRef(new Set());
+    
     channelRef.current.bind('messages-read', (data) => {
       if (data.readBy === 'admin') {
+        const readIds = data.messageIds.map(Number);
+        // Store these IDs in case some messages still have tempId
+        readIds.forEach(id => readByAdminIdsRef.current.add(id));
         setMessages(prev => prev.map(msg => 
-          data.messageIds.includes(msg.id) ? { ...msg, status: 'read' } : msg
+          readIds.includes(Number(msg.id)) ? { ...msg, status: 'read' } : msg
         ));
       }
     });
     
     // Typing indicator - listen for OTHER party typing or recording
     channelRef.current.bind('typing', (data) => {
-      console.log('📥 Received indicator:', data);
+
       
       // If I'm admin, show when user types. If I'm user, show when admin types.
       const shouldShow = isAdmin ? data.sender === 'user' : data.sender === 'admin';
@@ -273,7 +381,7 @@ useEffect(() => {
         setIsOtherTyping(data.isTyping);
         setIsOtherRecording(data.isRecording || false);
         
-        console.log('👁 Showing:', { typing: data.isTyping, recording: data.isRecording });
+
         
         // Auto-hide after 3 seconds if no update
         if (data.isTyping || data.isRecording) {
@@ -330,38 +438,29 @@ useEffect(() => {
   };
 
 
+  const prevMessageCountRef = useRef(0);
   useEffect(() => {
-    scrollToBottom();
+    // فقط وقتی پیام جدید اضافه شد scroll کن، نه وقتی edit/delete شد
+    if (messages.length > prevMessageCountRef.current) {
+      scrollToBottom();
+    }
+    prevMessageCountRef.current = messages.length;
   }, [messages]);
 
   useEffect(() => {
     const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
     
     if (isMobile) {
-      document.body.style.overflow = 'hidden';
-    }
-
-    // Android + iOS: resize container to match visualViewport when keyboard opens
-    const container = document.querySelector('.support-chat-container');
-    const handleViewportResize = () => {
-      if (window.visualViewport && container) {
-        container.style.height = window.visualViewport.height + 'px';
-      }
-    };
-
-    if (isMobile && window.visualViewport) {
-      window.visualViewport.addEventListener('resize', handleViewportResize);
+      document.body.style.position = 'fixed';
+      document.body.style.width = '100%';
+      document.body.style.height = '100%';
     }
     
     return () => {
       if (isMobile) {
-        document.body.style.overflow = '';
-      }
-      if (isMobile && window.visualViewport) {
-        window.visualViewport.removeEventListener('resize', handleViewportResize);
-      }
-      if (container) {
-        container.style.height = '';
+        document.body.style.position = '';
+        document.body.style.width = '';
+        document.body.style.height = '';
       }
     };
   }, []);
@@ -546,7 +645,7 @@ useEffect(() => {
     if ((isTyping || isRecording) && now - lastTypingSentRef.current < 1000) return;
     lastTypingSentRef.current = now;
     
-    console.log('📤 Sending indicator:', { isTyping, isRecording });
+
     
     try {
       const token = authService.getToken();
@@ -633,7 +732,7 @@ useEffect(() => {
       
       // Update to 'sent' status
       setMessages(prev => prev.map(m => 
-        m.id === tempId ? { ...m, id: data.message.id, status: 'sent' } : m
+        m.id === tempId ? { ...m, id: data.message.id, status: readByAdminIdsRef.current.has(Number(data.message.id)) ? 'read' : 'sent' } : m
       ));
       
     } catch (error) {
@@ -720,7 +819,7 @@ useEffect(() => {
       const messageData = await messageResponse.json();
       
       setMessages(prev => prev.map(m => 
-        m.id === tempId ? { ...m, id: messageData.message.id, image: uploadData.url, status: 'sent' } : m
+        m.id === tempId ? { ...m, id: messageData.message.id, image: uploadData.url, status: readByAdminIdsRef.current.has(Number(messageData.message.id)) ? 'read' : 'sent' } : m
       ));
 
     } catch (error) {
@@ -956,7 +1055,7 @@ useEffect(() => {
           const messageData = await messageResponse.json();
           
           setMessages(prev => prev.map(m => 
-            m.id === tempId ? { ...m, id: messageData.message.id, audio: uploadData.url, status: 'sent' } : m
+            m.id === tempId ? { ...m, id: messageData.message.id, audio: uploadData.url, status: readByAdminIdsRef.current.has(Number(messageData.message.id)) ? 'read' : 'sent' } : m
           ));
 
         } catch (error) {
@@ -1088,7 +1187,7 @@ useEffect(() => {
     return (
       <div className="support-chat-container">
         <div className="chat-header-glass">
-          <button className="chat-back-btn" onClick={onBack}>
+          <button className="chat-back-btn" onClick={handleBack}>
             <ArrowLeft size={22} />
           </button>
           <div className="chat-header-info">
@@ -1112,7 +1211,7 @@ useEffect(() => {
     <div className="support-chat-container">
      {/* Header */}
         <div className="chat-header-glass">
-          <button className="chat-back-btn" onClick={onBack}>
+          <button className="chat-back-btn" onClick={handleBack}>
             <ChevronLeft size={22} />
           </button>
           <div className="chat-header-info">
@@ -1131,16 +1230,17 @@ useEffect(() => {
         className="chat-messages-area"
         ref={messagesAreaRef}
         onScroll={handleScroll}
-        onTouchStart={() => {
-          // Close keyboard when touching messages area
-          if (document.activeElement === inputRef.current) {
-            inputRef.current?.blur();
-          }
-        }}
       >
         {messages.map((msg) => (
+          <React.Fragment key={msg.id}>
+            {firstUnreadMsgIdRef.current && msg.id === firstUnreadMsgIdRef.current && (
+              <div id="unread-divider" style={{display:'flex',alignItems:'center',gap:'12px',padding:'8px 16px',margin:'8px 0',background:'rgba(255,255,255,0.75)',borderRadius:'8px'}}>
+                <div style={{flex:1,height:'1px',background:'rgba(0,0,0,0.25)'}} />
+                <span style={{fontSize:'13px',color:'rgba(1,1,1,0.6)',whiteSpace:'nowrap',fontWeight:500}}>پیام‌های خوانده نشده</span>
+                <div style={{flex:1,height:'1px',background:'rgba(0,0,0,0.25)'}} />
+              </div>
+            )}
           <div
-            key={msg.id}
             ref={el => messageRefs.current[msg.id] = el}
             className={`chat-bubble-glass ${msg.sender === 'user' ? 'user-bubble' : 'support-bubble'} ${selectedMessage?.id === msg.id ? 'selected' : ''} ${msg.image ? 'image-bubble' : ''} ${msg.audio ? 'audio-bubble' : ''} ${highlightedMessageId === msg.id ? 'highlighted' : ''}`}
             onTouchStart={(e) => handleTouchStart(e, msg)}
@@ -1307,6 +1407,7 @@ useEffect(() => {
               {renderMessageStatus(msg)}
             </span>
           </div>
+          </React.Fragment>
         ))}
         <div ref={messagesEndRef} />
       </div>
@@ -1422,10 +1523,13 @@ useEffect(() => {
         </div>
       )}
 
-      {/* Scroll to Bottom Button */}
+      {/* Scroll to Bottom Button with Badge */}
       {showScrollButton && (
         <button className="scroll-to-bottom-btn" onClick={scrollToBottom}>
           <ArrowDown size={20} />
+          {chatUnreadCount > 0 && (
+            <span style={{position:'absolute',top:'-6px',right:'-6px',background:'#3b82f6',color:'white',borderRadius:'10px',padding:'1px 6px',fontSize:'11px',fontWeight:'bold',minWidth:'18px',textAlign:'center'}}>{chatUnreadCount}</span>
+          )}
         </button>
       )}
 

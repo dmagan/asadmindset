@@ -11,7 +11,7 @@ const API_URL = 'https://asadmindset.com/wp-json/asadmindset/v1';
 const PUSHER_KEY = '71815fd9e2b90f89a57b';
 const PUSHER_CLUSTER = 'eu';
 
-const TeamChatView = ({ conversationId, onBack }) => {
+const TeamChatView = ({ conversationId, onBack, onUnreadCountChange }) => {
   usePresence('team', conversationId);
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
@@ -75,6 +75,13 @@ const TeamChatView = ({ conversationId, onBack }) => {
   const [highlightedMessageId, setHighlightedMessageId] = useState(null);
   const [showScrollButton, setShowScrollButton] = useState(false);
 
+  // Unread tracking
+  const [chatUnreadCount, setChatUnreadCount] = useState(0);
+  const firstUnreadMsgIdRef = useRef(null);
+  const observerReadyRef = useRef(false);
+  const initialScrollDoneRef = useRef(false);
+  const observerRef = useRef(null);
+
   // Refs
   const messagesEndRef = useRef(null);
   const messagesAreaRef = useRef(null);
@@ -119,19 +126,15 @@ const TeamChatView = ({ conversationId, onBack }) => {
   useEffect(() => {
     if (conversationId) loadConversation();
     return () => {
-      // Mark as read when leaving the chat
-      if (conversationId) {
-        const token = authService.getToken();
-        fetch(`${API_URL}/team/conversations/${conversationId}/read`, { method: 'POST', headers: { 'Authorization': `Bearer ${token}` } }).catch(() => {});
-      }
       if (channelRef.current) channelRef.current.unbind_all();
       if (pusherRef.current) pusherRef.current.disconnect();
     };
   }, [conversationId]);
 
-  useEffect(() => {
-    if (conversationId && messages.length > 0) markAsRead();
-  }, [conversationId, messages.length]);
+  // Old auto mark-as-read disabled for progressive tracking
+  // useEffect(() => {
+  //   if (conversationId && messages.length > 0) markAsRead();
+  // }, [conversationId, messages.length]);
 
   const prevMsgCount = useRef(0);
   useEffect(() => {
@@ -200,7 +203,81 @@ const TeamChatView = ({ conversationId, onBack }) => {
         };
       }));
       connectPusher();
+      
+      // Calculate unread
+      const unreadN = data.conversation.unreadCount || 0;
+      setChatUnreadCount(unreadN);
+      if (unreadN > 0) {
+        const otherMsgs = data.messages.filter(m => m.senderId !== currentUserId);
+        if (otherMsgs.length > 0) {
+          const idx = Math.max(0, otherMsgs.length - unreadN);
+          firstUnreadMsgIdRef.current = otherMsgs[idx]?.id || null;
+        }
+      }
     } catch (e) { console.error(e); } finally { setLoading(false); }
+  };
+
+  // Scroll to first unread
+  useEffect(() => {
+    if (!loading && messages.length > 0 && !initialScrollDoneRef.current) {
+      initialScrollDoneRef.current = true;
+      observerReadyRef.current = false;
+      setTimeout(() => {
+        if (firstUnreadMsgIdRef.current) {
+          const divider = document.getElementById('unread-divider');
+          if (divider) divider.scrollIntoView({ behavior: 'auto', block: 'start' });
+          setTimeout(() => { observerReadyRef.current = true; }, 600);
+          return;
+        }
+        messagesEndRef.current?.scrollIntoView({ behavior: 'auto' });
+        observerReadyRef.current = true;
+      }, 150);
+    }
+  }, [loading, messages.length]);
+
+  // IntersectionObserver
+  useEffect(() => {
+    if (loading || messages.length === 0) return;
+    if (observerRef.current) observerRef.current.disconnect();
+    const observer = new IntersectionObserver((entries) => {
+      if (!observerReadyRef.current) return;
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          const msgId = parseInt(entry.target.dataset.msgId);
+          if (msgId) {
+            setChatUnreadCount(prev => {
+              const n = Math.max(0, prev - 1);
+              if (onUnreadCountChange) onUnreadCountChange(prevTotal => Math.max(0, prevTotal - 1));
+              return n;
+            });
+            observer.unobserve(entry.target);
+          }
+        }
+      });
+    }, { root: messagesAreaRef.current, threshold: 0.5 });
+    observerRef.current = observer;
+    const otherMsgs = messages.filter(m => m.sender !== 'user');
+    const startIdx = Math.max(0, otherMsgs.length - chatUnreadCount);
+    otherMsgs.slice(startIdx).forEach(msg => {
+      const el = messageRefs.current[msg.id];
+      if (el) { el.dataset.msgId = msg.id; observer.observe(el); }
+    });
+    return () => observer.disconnect();
+  }, [loading, messages]);
+
+  // Debounced server sync
+  const markReadTimerRef = useRef(null);
+  useEffect(() => {
+    if (markReadTimerRef.current) clearTimeout(markReadTimerRef.current);
+    markReadTimerRef.current = setTimeout(() => { if (conversationId) markAsRead(); }, 2000);
+    return () => { if (markReadTimerRef.current) clearTimeout(markReadTimerRef.current); };
+  }, [chatUnreadCount]);
+
+  // Handle back
+  const handleBack = async () => {
+    if (markReadTimerRef.current) clearTimeout(markReadTimerRef.current);
+    if (conversationId) { try { await markAsRead(); } catch (e) {} }
+    onBack();
   };
 
   const connectPusher = () => {
@@ -566,7 +643,7 @@ const TeamChatView = ({ conversationId, onBack }) => {
     return (
       <div className="support-chat-container">
         <div className="chat-header-glass">
-          <button className="chat-back-btn" onClick={onBack}><ArrowLeft size={22} /></button>
+          <button className="chat-back-btn" onClick={handleBack}><ArrowLeft size={22} /></button>
           <div className="chat-header-info">
             <div className="chat-header-text">
               <span className="chat-header-title">چت تیمی</span>
@@ -584,7 +661,7 @@ const TeamChatView = ({ conversationId, onBack }) => {
     <div className="support-chat-container">
       {/* Header */}
       <div className="chat-header-glass">
-        <button className="chat-back-btn" onClick={onBack}><ChevronLeft size={22} /></button>
+        <button className="chat-back-btn" onClick={handleBack}><ChevronLeft size={22} /></button>
         <div className="chat-header-info" style={{ flex: 1, justifyContent: 'flex-end', cursor: conversation?.type === 'group' ? 'pointer' : 'default' }} onClick={() => conversation?.type === 'group' && setShowGroupInfo(true)}>
           <div className="chat-header-text">
             <span className="chat-header-title">{getHeaderTitle()}</span>
@@ -599,8 +676,15 @@ const TeamChatView = ({ conversationId, onBack }) => {
       {/* Messages */}
       <div className="chat-messages-area" ref={messagesAreaRef} onScroll={handleScroll}>
         {messages.map((msg) => (
+          <React.Fragment key={msg.id}>
+            {firstUnreadMsgIdRef.current && msg.id === firstUnreadMsgIdRef.current && (
+              <div id="unread-divider" style={{display:'flex',alignItems:'center',gap:'12px',padding:'8px 16px',margin:'8px 0',background:'rgba(255,255,255,0.75)',borderRadius:'8px'}}>
+                <div style={{flex:1,height:'1px',background:'rgba(0,0,0,0.25)'}} />
+                <span style={{fontSize:'13px',color:'rgba(1,1,1,0.6)',whiteSpace:'nowrap',fontWeight:500}}>پیام‌های خوانده نشده</span>
+                <div style={{flex:1,height:'1px',background:'rgba(0,0,0,0.25)'}} />
+              </div>
+            )}
           <div
-            key={msg.id}
             ref={el => messageRefs.current[msg.id] = el}
             className={`chat-bubble-glass ${msg.sender === 'user' ? 'user-bubble' : 'support-bubble'} ${selectedMessage?.id === msg.id ? 'selected' : ''} ${msg.image ? 'image-bubble' : ''} ${msg.audio ? 'audio-bubble' : ''} ${highlightedMessageId === msg.id ? 'highlighted' : ''}`}
             onTouchStart={(e) => handleTouchStart(e, msg)}
@@ -714,6 +798,7 @@ const TeamChatView = ({ conversationId, onBack }) => {
               <span style={{ display: 'block', fontSize: '10px', color: 'hsla(0,0%,50%,1)', marginTop: 2, fontWeight: 600 }}>{msg.senderName}</span>
             )}
           </div>
+          </React.Fragment>
         ))}
         <div ref={messagesEndRef} />
       </div>
@@ -766,7 +851,7 @@ const TeamChatView = ({ conversationId, onBack }) => {
       )}
 
       {/* Scroll button */}
-      {showScrollButton && <button className="scroll-to-bottom-btn" onClick={scrollToBottom}><ArrowDown size={20} /></button>}
+      {showScrollButton && <button className="scroll-to-bottom-btn" onClick={scrollToBottom}><ArrowDown size={20} />{chatUnreadCount > 0 && <span style={{position:'absolute',top:'-6px',right:'-6px',background:'#3b82f6',color:'white',borderRadius:'10px',padding:'1px 6px',fontSize:'11px',fontWeight:'bold',minWidth:'18px',textAlign:'center'}}>{chatUnreadCount}</span>}</button>}
 
       {/* Input */}
       <div className="chat-input-container-glass">

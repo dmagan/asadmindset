@@ -1,50 +1,73 @@
-const CACHE_NAME = 'asadmindset-shell-v1';
+// ==============================
+// 🔄 VERSION - هر بار بیلد جدید این عدد رو عوض کن!
+// ==============================
+const APP_VERSION = '3';
+const CACHE_NAME = `asadmindset-shell-v${APP_VERSION}`;
+
 const SHELL_FILES = [
   '/',
   '/index.html'
 ];
 
-// Install: cache the app shell (index.html with splash loader)
+// Install: cache the app shell
 self.addEventListener('install', (event) => {
+  console.log(`[SW] Installing version ${APP_VERSION}`);
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
       return cache.addAll(SHELL_FILES);
     })
   );
+  // فوری فعال شو، منتظر بسته شدن تب‌ها نشو
   self.skipWaiting();
 });
 
-// Activate: clean old caches
+// Activate: پاک کردن کش‌های قدیمی + اطلاع به کلاینت
 self.addEventListener('activate', (event) => {
+  console.log(`[SW] Activating version ${APP_VERSION}`);
   event.waitUntil(
     caches.keys().then((keys) => {
       return Promise.all(
-        keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))
+        keys
+          .filter((key) => key !== CACHE_NAME)
+          .map((key) => {
+            console.log(`[SW] Deleting old cache: ${key}`);
+            return caches.delete(key);
+          })
       );
+    }).then(() => {
+      // کنترل تمام تب‌های باز رو بگیر
+      return self.clients.claim();
+    }).then(() => {
+      // به تمام تب‌های باز بگو رفرش کنن
+      return self.clients.matchAll({ type: 'window' }).then((clients) => {
+        clients.forEach((client) => {
+          client.postMessage({ type: 'SW_UPDATED', version: APP_VERSION });
+        });
+      });
     })
   );
-  self.clients.claim();
 });
 
-// Fetch: serve index.html from cache first (for navigation), network-first for other assets
+// Fetch strategy
 self.addEventListener('fetch', (event) => {
   const { request } = event;
 
-  // Navigation requests (HTML pages) → Cache first, then network
+  // Navigation requests (HTML pages) → Network First, fallback to cache
   if (request.mode === 'navigate') {
     event.respondWith(
-      caches.match('/index.html').then((cached) => {
-        // Return cached immediately, but also fetch fresh version in background
-        const fetchPromise = fetch(request).then((response) => {
+      fetch(request)
+        .then((response) => {
+          // شبکه جواب داد → کش رو آپدیت کن
           if (response && response.ok) {
             const clone = response.clone();
             caches.open(CACHE_NAME).then((cache) => cache.put('/index.html', clone));
           }
           return response;
-        }).catch(() => cached);
-
-        return cached || fetchPromise;
-      })
+        })
+        .catch(() => {
+          // آفلاین → از کش بخون
+          return caches.match('/index.html');
+        })
     );
     return;
   }
@@ -52,13 +75,15 @@ self.addEventListener('fetch', (event) => {
   // JS/CSS assets → Network first, fallback to cache
   if (request.url.match(/\.(js|css)$/)) {
     event.respondWith(
-      fetch(request).then((response) => {
-        if (response && response.ok) {
-          const clone = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
-        }
-        return response;
-      }).catch(() => caches.match(request))
+      fetch(request)
+        .then((response) => {
+          if (response && response.ok) {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
+          }
+          return response;
+        })
+        .catch(() => caches.match(request))
     );
     return;
   }

@@ -13,7 +13,7 @@ import SupportChat from './components/SupportChat';
 import AdminConversations from './components/AdminConversations';
 import AdminChatView from './components/AdminChatView';
 import AlphaPage from './components/AlphaPage';
-import AlphaChannel from './components/AlphaChannel';
+import AlphaChannel, { resetAlphaChannelState } from './components/AlphaChannel';
 import SubscriptionPage from './components/SubscriptionPage';
 import MyPurchases from './components/MyPurchases';
 import AdminSubscriptionManager from './components/AdminSubscriptionManager';
@@ -315,7 +315,7 @@ const CutifyGlassDemo = () => {
           channelRef.current = pusherRef.current.subscribe(channelName);
           channelRef.current.bind('new-message', (msgData) => {
             // فقط پیام‌های ادمین رو حساب کن و فقط وقتی در صفحه چت نیستیم
-            if (msgData.sender === 'admin') {
+            if (msgData.sender === 'admin' && activeTabRef.current !== 'support') {
               setUnreadCount(prev => prev + 1);
             }
           });
@@ -381,6 +381,7 @@ const CutifyGlassDemo = () => {
       setPendingSubCount(0);
       setAlphaUnreadCount(0);
       setTeamUnreadCount(0);
+      resetAlphaChannelState();
       pushService.removeToken();
       disconnectPusher();
     }
@@ -691,6 +692,7 @@ if (activeTab === 'projects') {
         <SupportChat 
           onBack={() => setActiveTab('home')} 
           onMessagesRead={() => setUnreadCount(0)}
+          onUnreadCountChange={setUnreadCount}
         />
       );
     }
@@ -730,6 +732,7 @@ if (activeTab === 'projects') {
             setSelectedTeamConversationId(null);
             setActiveTab('teamChat');
           }}
+          onUnreadCountChange={setTeamUnreadCount}
         />
       );
     }

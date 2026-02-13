@@ -48,7 +48,54 @@ const getPusher = () => {
   return pusherInstance;
 };
 
-const AlphaChannel = ({ onBack, isAdmin: isAdminProp }) => {
+// Persistent last read tracking (survives component unmount/remount)
+let persistedLastReadPostId = 0;
+let syncInProgress = false;
+let syncTimer = null;
+
+// Sync to server - throttled (max once per 2 seconds)
+const syncToServer = (postId) => {
+  if (syncTimer) return; // already scheduled
+  
+  syncTimer = setTimeout(async () => {
+    syncTimer = null;
+    if (syncInProgress) return;
+    
+    const latest = persistedLastReadPostId;
+    if (latest <= 0) return;
+    
+    console.log('syncToServer - sending postId:', latest);
+    syncInProgress = true;
+    try {
+      const token = authService.getToken();
+      if (token) {
+        await fetch(`${API_URL}/channel/mark-read`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ postId: latest })
+        });
+      }
+    } catch (e) {
+      console.error('Sync mark-read error:', e);
+    } finally {
+      syncInProgress = false;
+    }
+  }, 2000);
+};
+
+// Reset persisted data (call on logout)
+export const resetAlphaChannelState = () => {
+  if (syncTimer) {
+    clearTimeout(syncTimer);
+    syncTimer = null;
+  }
+  persistedLastReadPostId = 0;
+};
+
+const AlphaChannel = ({ onBack, isAdmin: isAdminProp, onUnreadCountChange }) => {
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -58,7 +105,47 @@ const AlphaChannel = ({ onBack, isAdmin: isAdminProp }) => {
   const [showNotifications, setShowNotifications] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   
-  // از prop استفاده کن، اگه نبود خودش چک کنه
+  // Unread tracking states
+  const [lastReadPostId, setLastReadPostId] = useState(0);
+  const [channelUnreadCount, setChannelUnreadCount] = useState(0);
+  const lastReadPostIdRef = useRef(0);
+  const observerRef = useRef(null);
+  const initialScrollDoneRef = useRef(false);
+  const firstUnreadPostIdRef = useRef(null); // Fixed divider position
+  
+  // Handle back button - sync to server before leaving
+  const handleBack = async () => {
+    // Cancel any pending throttled sync
+    if (syncTimer) {
+      clearTimeout(syncTimer);
+      syncTimer = null;
+    }
+    
+    // Direct sync to server
+    const postId = persistedLastReadPostId;
+    console.log('handleBack - syncing postId:', postId);
+    if (postId > 0) {
+      try {
+        const token = authService.getToken();
+        if (token) {
+          const resp = await fetch(`${API_URL}/channel/mark-read`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ postId })
+          });
+          const result = await resp.json();
+          console.log('handleBack - server response:', result);
+        }
+      } catch (e) {
+        console.error('handleBack - sync error:', e);
+      }
+    }
+    
+    onBack();
+  };
   const isAdmin = isAdminProp !== undefined ? isAdminProp : authService.getUser()?.nicename === 'admin';
   
   // Track presence in alpha channel (prevents push notifications while viewing)
@@ -133,6 +220,33 @@ const AlphaChannel = ({ onBack, isAdmin: isAdminProp }) => {
         setPosts(prev => [...prev, ...data.posts]);
       } else {
         setPosts(data.posts);
+        
+        // Set lastReadPostId from server (only on first load)
+        if (data.lastReadPostId !== undefined) {
+          // Use the higher of server value or locally persisted value
+          // (local may be ahead if previous flush hasn't been processed yet)
+          const serverLastRead = Math.max(data.lastReadPostId, persistedLastReadPostId);
+          console.log('loadPosts - server lastReadPostId:', data.lastReadPostId, 'persisted:', persistedLastReadPostId, 'using:', serverLastRead);
+          setLastReadPostId(serverLastRead);
+          lastReadPostIdRef.current = serverLastRead;
+          persistedLastReadPostId = serverLastRead;
+          
+          // Calculate initial unread count
+          const unread = data.posts.filter(p => p.id > serverLastRead).length;
+          setChannelUnreadCount(unread);
+          
+          // Remember the first unread post id for divider (fixed position)
+          const sortedForDivider = [...data.posts].reverse();
+          const firstUnread = sortedForDivider.find(p => p.id > serverLastRead);
+          firstUnreadPostIdRef.current = firstUnread ? firstUnread.id : null;
+          
+          // Also sync home page badge
+          if (onUnreadCountChange) {
+            onUnreadCountChange(unread);
+          }
+        } else {
+          console.warn('⚠️ Server did NOT return lastReadPostId - is the new alpha-channel.php deployed?');
+        }
       }
       
       setHasMore(pageNum < data.pagination.totalPages);
@@ -223,6 +337,15 @@ const AlphaChannel = ({ onBack, isAdmin: isAdminProp }) => {
         // New post from someone else - no auto scroll
         return [data, ...prev];
       });
+      
+      // If user is scrolled up (not near bottom), increment unread
+      if (containerRef.current) {
+        const { scrollTop, scrollHeight, clientHeight } = containerRef.current;
+        const isNearBottom = scrollHeight - scrollTop - clientHeight < 150;
+        if (!isNearBottom) {
+          setChannelUnreadCount(prev => prev + 1);
+        }
+      }
     });
     
     channelRef.current.unbind('post-updated');
@@ -329,14 +452,129 @@ const AlphaChannel = ({ onBack, isAdmin: isAdminProp }) => {
     };
   }, []);
 
-  // Scroll to bottom after initial posts load
+  // Scroll to first unread post after initial load (instead of bottom)
+  const observerReadyRef = useRef(false);
+  
   useEffect(() => {
-    if (!loading && posts.length > 0) {
+    if (!loading && posts.length > 0 && !initialScrollDoneRef.current) {
+      initialScrollDoneRef.current = true;
+      observerReadyRef.current = false; // Don't observe yet
+      
       setTimeout(() => {
+        const sortedPosts = [...posts].reverse(); // chronological order
+        const firstUnread = sortedPosts.find(p => p.id > lastReadPostIdRef.current);
+        
+        if (firstUnread) {
+          // Scroll to the unread divider (which is just above the first unread post)
+          const divider = document.getElementById('unread-divider');
+          if (divider) {
+            divider.scrollIntoView({ behavior: 'auto', block: 'start' });
+          } else {
+            const el = document.getElementById(`post-${firstUnread.id}`);
+            if (el) {
+              el.scrollIntoView({ behavior: 'auto', block: 'start' });
+            }
+          }
+          
+          // Enable observer after scroll settles (prevent auto-counting)
+          setTimeout(() => {
+            observerReadyRef.current = true;
+          }, 600);
+          return;
+        }
+        // If no unread, scroll to bottom and enable observer
         postsEndRef.current?.scrollIntoView({ behavior: 'auto' });
-      }, 100);
+        observerReadyRef.current = true;
+      }, 150);
     }
-  }, [loading]);
+  }, [loading, posts.length, lastReadPostId]);
+
+  // Mark post as read (update local + throttled server sync)
+  const markPostAsRead = useCallback((postId) => {
+    if (postId <= lastReadPostIdRef.current) return;
+    
+    console.log('markPostAsRead:', postId);
+    
+    // Update local tracking
+    lastReadPostIdRef.current = postId;
+    setLastReadPostId(postId);
+    persistedLastReadPostId = postId;
+    
+    // Throttled sync to server (every 2 seconds)
+    syncToServer(postId);
+  }, []);
+
+  // IntersectionObserver to detect when unread posts become visible
+  useEffect(() => {
+    if (loading || posts.length === 0) return;
+    
+    // Cleanup previous observer
+    if (observerRef.current) {
+      observerRef.current.disconnect();
+    }
+    
+    const observer = new IntersectionObserver(
+      (entries) => {
+        // Don't count until initial scroll is settled
+        if (!observerReadyRef.current) return;
+        
+        entries.forEach(entry => {
+          if (entry.isIntersecting) {
+            const postId = parseInt(entry.target.dataset.postId);
+            if (postId && postId > lastReadPostIdRef.current) {
+              markPostAsRead(postId);
+              
+              // Update unread count
+              setChannelUnreadCount(prev => {
+                const newCount = Math.max(0, prev - 1);
+                // Also update home page badge
+                if (onUnreadCountChange) {
+                  onUnreadCountChange(newCount);
+                }
+                return newCount;
+              });
+              
+              // Stop observing this post
+              observer.unobserve(entry.target);
+            }
+          }
+        });
+      },
+      {
+        root: containerRef.current,
+        threshold: 0.5, // Post is "seen" when 50% visible
+        rootMargin: '0px'
+      }
+    );
+    
+    observerRef.current = observer;
+    
+    // Observe only unread posts
+    const sortedPosts = [...posts].reverse();
+    sortedPosts.forEach(post => {
+      if (post.id > lastReadPostIdRef.current) {
+        const el = document.getElementById(`post-${post.id}`);
+        if (el) {
+          el.dataset.postId = post.id;
+          observer.observe(el);
+        }
+      }
+    });
+    
+    return () => {
+      observer.disconnect();
+    };
+  }, [loading, posts, markPostAsRead, onUnreadCountChange]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (syncTimer) {
+        clearTimeout(syncTimer);
+        syncTimer = null;
+      }
+    };
+  }, []);
 
 
   useEffect(() => {
@@ -1036,7 +1274,7 @@ const AlphaChannel = ({ onBack, isAdmin: isAdminProp }) => {
     return (
       <div className="support-chat-container">
         <div className="chat-header-glass">
-          <button className="chat-back-btn" onClick={onBack}>
+          <button className="chat-back-btn" onClick={handleBack}>
             <ArrowLeft size={22} />
           </button>
           <div className="chat-header-info">
@@ -1060,7 +1298,7 @@ const AlphaChannel = ({ onBack, isAdmin: isAdminProp }) => {
     <div className="support-chat-container">
       {/* Header */}
       <div className="chat-header-glass">
-        <button className="chat-back-btn" onClick={onBack}>
+        <button className="chat-back-btn" onClick={handleBack}>
           <ArrowLeft size={22} />
         </button>
         <div className="chat-header-info">
@@ -1138,12 +1376,23 @@ const AlphaChannel = ({ onBack, isAdmin: isAdminProp }) => {
           <div className="no-more-posts">پست‌های بیشتری وجود ندارد</div>
         )}
 
-        {[...posts].reverse().map((post) => (
-          <div 
-            key={post.id}
-            id={`post-${post.id}`}
-            className={`channel-post-card ${post.isPinned ? 'pinned' : ''} ${highlightedPostId === post.id ? 'highlighted' : ''}`}
-          >
+        {[...posts].reverse().map((post, index, arr) => {
+          // Show divider only at the fixed first unread position (set at mount time)
+          const showDivider = firstUnreadPostIdRef.current && post.id === firstUnreadPostIdRef.current;
+          
+          return (
+            <React.Fragment key={post.id}>
+              {showDivider && (
+                <div id="unread-divider" className="unread-divider">
+                  <div className="unread-divider-line" />
+                  <span className="unread-divider-text">پیام‌های خوانده نشده</span>
+                  <div className="unread-divider-line" />
+                </div>
+              )}
+              <div 
+                id={`post-${post.id}`}
+                className={`channel-post-card ${post.isPinned ? 'pinned' : ''} ${highlightedPostId === post.id ? 'highlighted' : ''}`}
+              >
             {post.isPinned && (
               <div className="pin-indicator">
                 <Pin size={14} />
@@ -1220,7 +1469,9 @@ const AlphaChannel = ({ onBack, isAdmin: isAdminProp }) => {
               </div>
             </div>
           </div>
-        ))}
+            </React.Fragment>
+          );
+        })}
         
         {!loading && posts.length === 0 && (
           <div className="empty-channel">
@@ -1232,10 +1483,13 @@ const AlphaChannel = ({ onBack, isAdmin: isAdminProp }) => {
         <div ref={postsEndRef} />
       </div>
       
-      {/* Scroll to Bottom Button */}
+      {/* Scroll to Bottom Button with Unread Badge */}
       {showScrollButton && (
         <button className="scroll-to-bottom-btn" onClick={scrollToBottom}>
           <ArrowDown size={20} />
+          {channelUnreadCount > 0 && (
+            <span className="scroll-btn-badge">{channelUnreadCount > 99 ? '99+' : channelUnreadCount}</span>
+          )}
         </button>
       )}
 
@@ -1657,16 +1911,34 @@ const AlphaChannel = ({ onBack, isAdmin: isAdminProp }) => {
           width: 44px;
           height: 44px;
           border-radius: 50%;
-          background: rgba(99, 102, 241, 0.9);
+          background: rgba(0, 0, 0, 0.85);
           backdrop-filter: blur(10px);
-          border: 1px solid rgba(255, 255, 255, 0.2);
+          border: 1px solid rgba(255, 255, 255, 0.15);
           color: #fff;
           display: flex;
           align-items: center;
           justify-content: center;
           cursor: pointer;
           z-index: 100;
-          box-shadow: 0 4px 20px rgba(99, 102, 241, 0.4);
+          box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+        }
+        
+        .scroll-btn-badge {
+          position: absolute;
+          top: -6px;
+          right: -6px;
+          min-width: 22px;
+          height: 22px;
+          padding: 0 6px;
+          background: #3b82f6;
+          border-radius: 11px;
+          font-size: 11px;
+          font-weight: 700;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: white;
+          box-shadow: 0 2px 8px rgba(59, 130, 246, 0.5);
         }
         
         .channel-post-card {
@@ -1676,6 +1948,29 @@ const AlphaChannel = ({ onBack, isAdmin: isAdminProp }) => {
           border-radius: 16px;
           padding: 16px;
           transition: all 0.2s;
+        }
+        
+        .unread-divider {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          padding: 8px 16px;
+          margin: 8px 0;
+          background: rgba(255, 255, 255, 0.75);
+          border-radius: 8px;
+        }
+        
+        .unread-divider-line {
+          flex: 1;
+          height: 1px;
+          background: rgba(0, 0, 0, 0.25);
+        }
+        
+        .unread-divider-text {
+          font-size: 13px;
+          color: rgba(1, 1, 1, 0.6);
+          white-space: nowrap;
+          font-weight: 500;
         }
         
         .channel-post-card.pinned {

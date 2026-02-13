@@ -338,9 +338,22 @@ class Alpha_Channel {
     );
 }, $posts);
         
+        // Get user's last read post id for unread tracking
+        $table_read_status = $wpdb->prefix . 'alpha_channel_read_status';
+        $last_read_id = $wpdb->get_var($wpdb->prepare(
+            "SELECT last_read_post_id FROM $table_read_status WHERE user_id = %d",
+            $user_id
+        ));
+        if ($last_read_id === null) {
+            $last_read_id = 0;
+        }
+        
+        error_log("Alpha Channel get_posts: user_id=$user_id, last_read_id=$last_read_id");
+        
         return rest_ensure_response(array(
             'success' => true,
             'posts' => $formatted_posts,
+            'lastReadPostId' => (int) $last_read_id,
             'pagination' => array(
                 'page' => $page,
                 'perPage' => $per_page,
@@ -911,6 +924,8 @@ class Alpha_Channel {
             (int) $last_read_id
         ));
         
+        error_log("Alpha Channel unread_count: user_id=$user_id, last_read_id=$last_read_id, count=$count");
+        
         return rest_ensure_response(array(
             'success' => true,
             'count' => (int) $count
@@ -918,50 +933,82 @@ class Alpha_Channel {
     }
     
     /**
-     * Mark alpha channel as read (save latest post id)
+     * Mark alpha channel as read (save latest seen post id)
+     * Accepts optional 'postId' param - if given, updates only if higher than current
+     * If no postId, marks all as read (backward compatible)
      */
     public function mark_channel_read($request) {
         global $wpdb;
         
         $user_id = $this->get_user_id_from_request($request);
+        $params = $request->get_json_params();
         
         $table_posts = $wpdb->prefix . 'alpha_channel_posts';
         $table_read_status = $wpdb->prefix . 'alpha_channel_read_status';
         
-        // Get the latest post id
-        $latest_post_id = $wpdb->get_var(
-            "SELECT MAX(id) FROM $table_posts"
-        );
-        
-        if (!$latest_post_id) {
-            $latest_post_id = 0;
+        // Ensure table exists
+        $table_exists = $wpdb->get_var("SHOW TABLES LIKE '$table_read_status'");
+        if (!$table_exists) {
+            // Create table (matching create_tables structure)
+            $charset_collate = $wpdb->get_charset_collate();
+            $wpdb->query("CREATE TABLE IF NOT EXISTS $table_read_status (
+                user_id bigint(20) NOT NULL,
+                last_read_post_id bigint(20) NOT NULL DEFAULT 0,
+                updated_at datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                PRIMARY KEY (user_id)
+            ) $charset_collate");
+            error_log("Alpha Channel: Created read_status table");
         }
         
-        // Upsert: insert or update
-        $exists = $wpdb->get_var($wpdb->prepare(
-            "SELECT COUNT(*) FROM $table_read_status WHERE user_id = %d",
+        // Get the target post id
+        if (isset($params['postId']) && (int) $params['postId'] > 0) {
+            $target_post_id = (int) $params['postId'];
+        } else {
+            // No specific postId → mark all as read (backward compatible)
+            $target_post_id = (int) $wpdb->get_var(
+                "SELECT MAX(id) FROM $table_posts"
+            );
+            if (!$target_post_id) {
+                $target_post_id = 0;
+            }
+        }
+        
+        error_log("Alpha Channel mark_read: user_id=$user_id, target_post_id=$target_post_id");
+        
+        // Get current last read
+        $current_last_read = (int) $wpdb->get_var($wpdb->prepare(
+            "SELECT last_read_post_id FROM $table_read_status WHERE user_id = %d",
             $user_id
         ));
         
-        if ($exists) {
-            $wpdb->update(
-                $table_read_status,
-                array('last_read_post_id' => $latest_post_id),
-                array('user_id' => $user_id)
-            );
-        } else {
-            $wpdb->insert(
-                $table_read_status,
-                array(
-                    'user_id' => $user_id,
-                    'last_read_post_id' => $latest_post_id
-                )
-            );
+        error_log("Alpha Channel mark_read: current_last_read=$current_last_read");
+        
+        // Only update if target is higher than current (never go backward)
+        if ($target_post_id > $current_last_read) {
+            // REPLACE INTO works because user_id is PRIMARY KEY
+            $result = $wpdb->query($wpdb->prepare(
+                "REPLACE INTO $table_read_status (user_id, last_read_post_id) VALUES (%d, %d)",
+                $user_id,
+                $target_post_id
+            ));
+            error_log("Alpha Channel mark_read: REPLACE result=" . var_export($result, true) . " error=" . $wpdb->last_error);
+            
+            // Verify the write
+            $verified = (int) $wpdb->get_var($wpdb->prepare(
+                "SELECT last_read_post_id FROM $table_read_status WHERE user_id = %d",
+                $user_id
+            ));
+            error_log("Alpha Channel mark_read: VERIFIED in DB=$verified");
+            
+            return rest_ensure_response(array(
+                'success' => ($verified == $target_post_id),
+                'lastReadPostId' => $verified
+            ));
         }
         
         return rest_ensure_response(array(
             'success' => true,
-            'lastReadPostId' => (int) $latest_post_id
+            'lastReadPostId' => max($target_post_id, $current_last_read)
         ));
     }
     
