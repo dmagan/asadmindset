@@ -1,7 +1,7 @@
 // ==============================
 // 🔄 VERSION - هر بار بیلد جدید این عدد رو عوض کن!
 // ==============================
-const APP_VERSION = '4';
+const APP_VERSION = '5';
 const CACHE_NAME = `asadmindset-shell-v${APP_VERSION}`;
 
 const SHELL_FILES = [

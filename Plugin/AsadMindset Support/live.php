@@ -56,6 +56,8 @@ class AsadMindset_Live {
             max_viewers int(11) DEFAULT 0,
             duration int(11) DEFAULT 0,
             is_archived tinyint(1) DEFAULT 1,
+            is_visible tinyint(1) DEFAULT 1,
+            trashed_at datetime DEFAULT NULL,
             created_by bigint(20) NOT NULL,
             created_at datetime DEFAULT CURRENT_TIMESTAMP,
             updated_at datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -128,10 +130,52 @@ class AsadMindset_Live {
             'permission_callback' => array($support, 'check_admin_auth')
         ));
         
-        // Delete archived live
+        // Delete (soft delete - move to trash)
         register_rest_route($namespace, '/live/delete/(?P<id>\d+)', array(
             'methods' => 'DELETE',
-            'callback' => array($this, 'delete_live'),
+            'callback' => array($this, 'trash_live'),
+            'permission_callback' => array($support, 'check_admin_auth')
+        ));
+        
+        // Restore from trash
+        register_rest_route($namespace, '/live/restore/(?P<id>\d+)', array(
+            'methods' => 'POST',
+            'callback' => array($this, 'restore_live'),
+            'permission_callback' => array($support, 'check_admin_auth')
+        ));
+        
+        // Permanent delete from trash
+        register_rest_route($namespace, '/live/permanent-delete/(?P<id>\d+)', array(
+            'methods' => 'DELETE',
+            'callback' => array($this, 'permanent_delete_live'),
+            'permission_callback' => array($support, 'check_admin_auth')
+        ));
+        
+        // Get trash list
+        register_rest_route($namespace, '/live/trash', array(
+            'methods' => 'GET',
+            'callback' => array($this, 'get_trash'),
+            'permission_callback' => array($support, 'check_admin_auth')
+        ));
+        
+        // Toggle visibility (hide/show for regular users)
+        register_rest_route($namespace, '/live/toggle-visibility/(?P<id>\d+)', array(
+            'methods' => 'POST',
+            'callback' => array($this, 'toggle_visibility'),
+            'permission_callback' => array($support, 'check_admin_auth')
+        ));
+        
+        // Update live title
+        register_rest_route($namespace, '/live/update/(?P<id>\d+)', array(
+            'methods' => 'PUT',
+            'callback' => array($this, 'update_live'),
+            'permission_callback' => array($support, 'check_admin_auth')
+        ));
+        
+        // Fix old broken playback URLs (one-time admin tool)
+        register_rest_route($namespace, '/live/fix-urls', array(
+            'methods' => 'POST',
+            'callback' => array($this, 'fix_playback_urls'),
             'permission_callback' => array($support, 'check_admin_auth')
         ));
         
@@ -240,7 +284,9 @@ class AsadMindset_Live {
     private function cf_create_live_input($title) {
         return $this->cf_request('/live_inputs', 'POST', array(
             'meta' => array('name' => $title),
-            'recording' => array('mode' => 'automatic')
+            'recording' => array('mode' => 'automatic'),
+            'preferLowLatency' => true,
+            'deleteRecordingAfterDays' => 45
         ));
     }
     
@@ -389,8 +435,11 @@ class AsadMindset_Live {
                 $cf_video_id = $latest_video['uid'] ?? null;
                 $thumbnail_url = $latest_video['thumbnail'] ?? null;
                 
-                if ($cf_video_id) {
-                    $playback_hls = 'https://customer-' . strtolower(substr(CF_ACCOUNT_ID, 0, 10)) . '.cloudflarestream.com/' . $cf_video_id . '/manifest/video.m3u8';
+                // استفاده از URL پخش واقعی که Cloudflare برمیگردونه
+                if (!empty($latest_video['playback']['hls'])) {
+                    $playback_hls = $latest_video['playback']['hls'];
+                } elseif ($cf_video_id) {
+                    $playback_hls = 'https://customer-nws45yp3z12295og.cloudflarestream.com/' . $cf_video_id . '/manifest/video.m3u8';
                 }
             }
         }
@@ -431,7 +480,53 @@ class AsadMindset_Live {
     /**
      * DELETE /live/delete/{id} - حذف لایو آرشیو شده
      */
-    public function delete_live($request) {
+    /**
+     * DELETE /live/delete/{id} - انتقال به سطل آشغال (soft delete)
+     */
+    public function trash_live($request) {
+        global $wpdb;
+        $table = $wpdb->prefix . 'live_streams';
+        $id = intval($request['id']);
+        
+        $stream = $wpdb->get_row($wpdb->prepare("SELECT * FROM $table WHERE id = %d", $id));
+        if (!$stream) {
+            return new WP_REST_Response(array('error' => 'لایو یافت نشد'), 404);
+        }
+        
+        // Soft delete - فقط is_archived رو 0 کن و trashed_at ثبت کن
+        $wpdb->update($table, array(
+            'is_archived' => 0,
+            'trashed_at' => current_time('mysql')
+        ), array('id' => $id));
+        
+        return new WP_REST_Response(array('success' => true, 'message' => 'به سطل آشغال منتقل شد'), 200);
+    }
+    
+    /**
+     * POST /live/restore/{id} - بازیابی از سطل آشغال
+     */
+    public function restore_live($request) {
+        global $wpdb;
+        $table = $wpdb->prefix . 'live_streams';
+        $id = intval($request['id']);
+        
+        $stream = $wpdb->get_row($wpdb->prepare("SELECT * FROM $table WHERE id = %d AND is_archived = 0", $id));
+        if (!$stream) {
+            return new WP_REST_Response(array('error' => 'لایو یافت نشد'), 404);
+        }
+        
+        $wpdb->update($table, array(
+            'is_archived' => 1,
+            'trashed_at' => null
+        ), array('id' => $id));
+        
+        return new WP_REST_Response(array('success' => true, 'message' => 'بازیابی شد'), 200);
+    }
+    
+    /**
+     * DELETE /live/permanent-delete/{id} - حذف دائم + حذف از Cloudflare
+     */
+    public function permanent_delete_live($request) {
         global $wpdb;
         $table = $wpdb->prefix . 'live_streams';
         $id = intval($request['id']);
@@ -446,17 +541,108 @@ class AsadMindset_Live {
             $this->cf_delete_live_input($stream->cf_live_input_id);
         }
         
-        // حذف چت و بیننده‌ها
+        // حذف چت و بیننده‌ها و رکورد
         $wpdb->delete($wpdb->prefix . 'live_chat', array('stream_id' => $id));
         $wpdb->delete($wpdb->prefix . 'live_viewers', array('stream_id' => $id));
         $wpdb->delete($table, array('id' => $id));
         
-        return new WP_REST_Response(array('success' => true), 200);
+        return new WP_REST_Response(array('success' => true, 'message' => 'حذف دائم شد'), 200);
     }
     
-    // ==========================================
-    // Public/User Endpoints
-    // ==========================================
+    /**
+     * GET /live/trash - لیست سطل آشغال
+     */
+    public function get_trash($request) {
+        global $wpdb;
+        $table = $wpdb->prefix . 'live_streams';
+        
+        $streams = $wpdb->get_results(
+            "SELECT id, title, thumbnail_url, started_at, ended_at, duration, max_viewers, trashed_at
+             FROM $table
+             WHERE status = 'ended' AND is_archived = 0
+             ORDER BY trashed_at DESC"
+        );
+        
+        $result = array();
+        foreach ($streams as $s) {
+            $result[] = array(
+                'id' => (int) $s->id,
+                'title' => $s->title,
+                'thumbnail_url' => $s->thumbnail_url,
+                'started_at' => $s->started_at,
+                'duration' => (int) $s->duration,
+                'max_viewers' => (int) $s->max_viewers,
+                'trashed_at' => $s->trashed_at
+            );
+        }
+        
+        return new WP_REST_Response(array('streams' => $result, 'total' => count($result)), 200);
+    }
+    
+    /**
+     * POST /live/toggle-visibility/{id} - مخفی/نمایش لایو برای کاربران عادی
+     */
+    public function toggle_visibility($request) {
+        global $wpdb;
+        $table = $wpdb->prefix . 'live_streams';
+        $id = intval($request['id']);
+        
+        $stream = $wpdb->get_row($wpdb->prepare("SELECT * FROM $table WHERE id = %d", $id));
+        if (!$stream) {
+            return new WP_REST_Response(array('error' => 'لایو یافت نشد'), 404);
+        }
+        
+        $new_visibility = $stream->is_visible ? 0 : 1;
+        $wpdb->update($table, array('is_visible' => $new_visibility), array('id' => $id));
+        
+        return new WP_REST_Response(array(
+            'success' => true,
+            'is_visible' => (bool) $new_visibility,
+            'message' => $new_visibility ? 'لایو برای کاربران نمایش داده می‌شود' : 'لایو از دید کاربران مخفی شد'
+        ), 200);
+    }
+    
+    /**
+     * PUT /live/update/{id} - ویرایش عنوان لایو (دیتابیس + Cloudflare)
+     */
+    public function update_live($request) {
+        global $wpdb;
+        $table = $wpdb->prefix . 'live_streams';
+        $id = intval($request['id']);
+        
+        $stream = $wpdb->get_row($wpdb->prepare("SELECT * FROM $table WHERE id = %d", $id));
+        if (!$stream) {
+            return new WP_REST_Response(array('error' => 'لایو یافت نشد'), 404);
+        }
+        
+        $new_title = sanitize_text_field($request->get_param('title'));
+        if (empty($new_title)) {
+            return new WP_REST_Response(array('error' => 'عنوان نمی‌تواند خالی باشد'), 400);
+        }
+        
+        // آپدیت در دیتابیس
+        $wpdb->update($table, array('title' => $new_title), array('id' => $id));
+        
+        // آپدیت در Cloudflare
+        if ($stream->cf_live_input_id) {
+            $this->cf_request('/live_inputs/' . $stream->cf_live_input_id, 'PUT', array(
+                'meta' => array('name' => $new_title)
+            ));
+        }
+        
+        // آپدیت ویدیوی ضبط شده در Cloudflare
+        if ($stream->cf_video_id) {
+            $this->cf_request('/' . $stream->cf_video_id, 'POST', array(
+                'meta' => array('name' => $new_title)
+            ));
+        }
+        
+        return new WP_REST_Response(array(
+            'success' => true,
+            'title' => $new_title,
+            'message' => 'عنوان ویرایش شد'
+        ), 200);
+    }
     
     /**
      * GET /live/status - وضعیت لایو (عمومی)
@@ -465,11 +651,13 @@ class AsadMindset_Live {
         global $wpdb;
         $table = $wpdb->prefix . 'live_streams';
         
+        // اول چک کن آیا لایو فعاله
         $live = $wpdb->get_row("SELECT id, title, status, started_at, viewers_count FROM $table WHERE status = 'live' ORDER BY id DESC LIMIT 1");
         
         if ($live) {
             return new WP_REST_Response(array(
                 'is_live' => true,
+                'preparing' => false,
                 'stream_id' => (int) $live->id,
                 'title' => $live->title,
                 'started_at' => $live->started_at,
@@ -477,8 +665,21 @@ class AsadMindset_Live {
             ), 200);
         }
         
+        // بعد چک کن آیا لایو در حال آماده‌سازیه (idle)
+        $idle = $wpdb->get_row("SELECT id, title, status FROM $table WHERE status = 'idle' ORDER BY id DESC LIMIT 1");
+        
+        if ($idle) {
+            return new WP_REST_Response(array(
+                'is_live' => false,
+                'preparing' => true,
+                'stream_id' => (int) $idle->id,
+                'title' => $idle->title
+            ), 200);
+        }
+        
         return new WP_REST_Response(array(
             'is_live' => false,
+            'preparing' => false,
             'stream_id' => null
         ), 200);
     }
@@ -492,7 +693,7 @@ class AsadMindset_Live {
         $id = intval($request['id']);
         
         $stream = $wpdb->get_row($wpdb->prepare(
-            "SELECT id, title, description, playback_hls, cf_live_input_id, status, started_at, viewers_count FROM $table WHERE id = %d",
+            "SELECT * FROM $table WHERE id = %d",
             $id
         ));
         
@@ -503,7 +704,7 @@ class AsadMindset_Live {
         // برای لایو فعال از live input UID استفاده کن
         $playback_hls = $stream->playback_hls;
         if ($stream->status === 'live' && $stream->cf_live_input_id) {
-            $playback_hls = 'https://customer-' . strtolower(substr(CF_ACCOUNT_ID, 0, 10)) . '.cloudflarestream.com/' . $stream->cf_live_input_id . '/manifest/video.m3u8';
+            $playback_hls = 'https://customer-nws45yp3z12295og.cloudflarestream.com/' . $stream->cf_live_input_id . '/manifest/video.m3u8';
         }
         
         return new WP_REST_Response(array(
@@ -511,6 +712,9 @@ class AsadMindset_Live {
             'title' => $stream->title,
             'description' => $stream->description,
             'playback_hls' => $playback_hls,
+            'rtmps_url' => $stream->rtmps_url,
+            'rtmps_key' => $stream->rtmps_key,
+            'cf_live_input_id' => $stream->cf_live_input_id,
             'status' => $stream->status,
             'started_at' => $stream->started_at,
             'viewers_count' => (int) $stream->viewers_count
@@ -711,22 +915,39 @@ class AsadMindset_Live {
     public function get_archive($request) {
         global $wpdb;
         $table = $wpdb->prefix . 'live_streams';
+        $support = AsadMindset_Support::get_instance();
         
         $page = max(1, intval($request->get_param('page') ?? 1));
         $per_page = min(intval($request->get_param('per_page') ?? 20), 50);
         $offset = ($page - 1) * $per_page;
         
+        // چک کن آیا ادمین هست
+        $is_admin = false;
+        try {
+            $user_id = $support->get_user_id_from_request($request);
+            if ($user_id) {
+                $user = get_user_by('id', $user_id);
+                $is_admin = $user && user_can($user, 'manage_options');
+            }
+        } catch (Exception $e) {}
+        
+        // ادمین همه رو ببینه، کاربر عادی فقط is_visible = 1
+        $where = "status = 'ended' AND is_archived = 1";
+        if (!$is_admin) {
+            $where .= " AND is_visible = 1";
+        }
+        
         $streams = $wpdb->get_results($wpdb->prepare(
             "SELECT id, title, description, thumbnail_url, playback_hls, cf_video_id, 
-                    started_at, ended_at, duration, max_viewers, created_at
+                    started_at, ended_at, duration, max_viewers, is_visible, created_at
              FROM $table
-             WHERE status = 'ended' AND is_archived = 1
+             WHERE $where
              ORDER BY ended_at DESC
              LIMIT %d OFFSET %d",
             $per_page, $offset
         ));
         
-        $total = (int) $wpdb->get_var("SELECT COUNT(*) FROM $table WHERE status = 'ended' AND is_archived = 1");
+        $total = (int) $wpdb->get_var("SELECT COUNT(*) FROM $table WHERE $where");
         
         $result = array();
         foreach ($streams as $s) {
@@ -740,7 +961,8 @@ class AsadMindset_Live {
                 'started_at' => $s->started_at,
                 'ended_at' => $s->ended_at,
                 'duration' => (int) $s->duration,
-                'max_viewers' => (int) $s->max_viewers
+                'max_viewers' => (int) $s->max_viewers,
+                'is_visible' => (bool) $s->is_visible
             );
         }
         
@@ -770,7 +992,10 @@ class AsadMindset_Live {
         
         $playback_hls = $stream->playback_hls;
         if ($stream->cf_video_id) {
-            $playback_hls = 'https://customer-' . strtolower(substr(CF_ACCOUNT_ID, 0, 10)) . '.cloudflarestream.com/' . $stream->cf_video_id . '/manifest/video.m3u8';
+            // اگر playback_hls قبلاً از API درست ذخیره نشده، از customer subdomain استفاده کن
+            if (empty($playback_hls) || strpos($playback_hls, 'customer-7ae441719b') !== false) {
+                $playback_hls = 'https://customer-nws45yp3z12295og.cloudflarestream.com/' . $stream->cf_video_id . '/manifest/video.m3u8';
+            }
         }
         
         return new WP_REST_Response(array(
@@ -783,6 +1008,62 @@ class AsadMindset_Live {
             'max_viewers' => (int) $stream->max_viewers,
             'started_at' => $stream->started_at,
             'ended_at' => $stream->ended_at
+        ), 200);
+    }
+    
+    // ==========================================
+    // Fix Old URLs
+    // ==========================================
+    
+    /**
+     * POST /live/fix-urls - فیکس URL‌های پخش قدیمی
+     * این endpoint تمام لایوهای آرشیو شده رو بررسی میکنه و URL پخش رو
+     * از طریق API کلادفلر به‌روز میکنه
+     */
+    public function fix_playback_urls($request) {
+        global $wpdb;
+        $table = $wpdb->prefix . 'live_streams';
+        
+        // تمام لایوهای ended با cf_live_input_id رو بگیر
+        $streams = $wpdb->get_results(
+            "SELECT id, cf_live_input_id, cf_video_id, playback_hls FROM $table WHERE status = 'ended' AND cf_live_input_id IS NOT NULL"
+        );
+        
+        $fixed = 0;
+        $errors = [];
+        
+        foreach ($streams as $stream) {
+            // از API کلادفلر ویدیوها رو بگیر
+            $videos = $this->cf_list_live_videos($stream->cf_live_input_id);
+            
+            if ($videos['success'] && !empty($videos['result'])) {
+                $latest = end($videos['result']);
+                $video_uid = $latest['uid'] ?? null;
+                $hls_url = $latest['playback']['hls'] ?? null;
+                $thumb = $latest['thumbnail'] ?? null;
+                
+                if (!$hls_url && $video_uid) {
+                    $hls_url = 'https://customer-nws45yp3z12295og.cloudflarestream.com/' . $video_uid . '/manifest/video.m3u8';
+                }
+                
+                if ($hls_url) {
+                    $wpdb->update($table, array(
+                        'playback_hls' => $hls_url,
+                        'cf_video_id' => $video_uid,
+                        'thumbnail_url' => $thumb
+                    ), array('id' => $stream->id));
+                    $fixed++;
+                }
+            } else {
+                $errors[] = 'Stream #' . $stream->id . ': ' . ($videos['error'] ?? 'Unknown');
+            }
+        }
+        
+        return new WP_REST_Response(array(
+            'success' => true,
+            'total' => count($streams),
+            'fixed' => $fixed,
+            'errors' => $errors
         ), 200);
     }
     

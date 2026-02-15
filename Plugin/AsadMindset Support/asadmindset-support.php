@@ -191,6 +191,9 @@ class AsadMindset_Support {
         require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
         dbDelta($sql_conversations);
         dbDelta($sql_messages);
+        
+        // Create live streaming tables
+        AsadMindset_Live::create_tables();
     }
     
     /**
@@ -1954,3 +1957,6 @@ require_once plugin_dir_path(__FILE__) . 'subscription.php';
 // Include Team Chat module
 require_once plugin_dir_path(__FILE__) . 'team-chat.php';
 require_once plugin_dir_path(__FILE__) . 'push-notifications.php';
+
+// Include Live Streaming module
+require_once plugin_dir_path(__FILE__) . 'live.php';

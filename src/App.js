@@ -89,7 +89,17 @@ const CutifyGlassDemo = () => {
     
     const checkOrientation = () => {
       if (isMobile) {
-        setIsLandscape(window.innerWidth > window.innerHeight);
+        // بررسی باز بودن کیبورد: اگه ارتفاع قابل مشاهده خیلی کمتر از ارتفاع صفحه باشه
+        const visualViewport = window.visualViewport;
+        const viewportHeight = visualViewport ? visualViewport.height : window.innerHeight;
+        const screenHeight = window.screen.height;
+        const keyboardLikelyOpen = viewportHeight < screenHeight * 0.7;
+        
+        if (keyboardLikelyOpen) {
+          setIsLandscape(false);
+        } else {
+          setIsLandscape(window.innerWidth > window.innerHeight);
+        }
       } else {
         setIsLandscape(false);
       }
@@ -99,9 +109,16 @@ const CutifyGlassDemo = () => {
     window.addEventListener('resize', checkOrientation);
     window.addEventListener('orientationchange', checkOrientation);
     
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', checkOrientation);
+    }
+    
     return () => {
       window.removeEventListener('resize', checkOrientation);
       window.removeEventListener('orientationchange', checkOrientation);
+      if (window.visualViewport) {
+        window.visualViewport.removeEventListener('resize', checkOrientation);
+      }
     };
   }, []);
   
@@ -1236,8 +1253,8 @@ if (activeTab === 'projects') {
 
       <IOSAddToHome />
 
-      {/* Landscape Warning Overlay */}
-      {isLandscape && !isImageZoomOpen && (
+      {/* Landscape Warning Overlay - نمایش نده وقتی لایو یا آرشیو پخش میشه */}
+      {isLandscape && !isImageZoomOpen && activeTab !== 'liveWatch' && activeTab !== 'liveWatchArchive' && (
         <div className="landscape-warning-overlay">
           <div className="landscape-warning-content">
             <div className="rotate-phone-icon">
