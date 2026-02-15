@@ -25,6 +25,9 @@ import TeamConversations from './components/TeamConversations';
 import TeamChatView from './components/TeamChatView';
 import PushPermission from './components/PushPermission';
 import SettingsPage from './components/SettingsPage';
+import LivePage from './components/LivePage';
+import LiveArchive from './components/LiveArchive';
+import AdminLiveManager from './components/AdminLiveManager';
 import { authService } from './services/authService';
 import { pushService } from './services/pushService';
 import Pusher from 'pusher-js';
@@ -48,6 +51,8 @@ import {
   BookOpen,
   Loader2,
   Settings,
+  Radio,
+  Video,
 } from 'lucide-react';
 
 const CutifyGlassDemo = () => {
@@ -126,6 +131,12 @@ const CutifyGlassDemo = () => {
   
   // State برای تعداد اشتراک‌های pending (برای ادمین)
   const [pendingSubCount, setPendingSubCount] = useState(0);
+  
+  // State برای لایو
+  const [isLiveActive, setIsLiveActive] = useState(false);
+  const [liveStreamId, setLiveStreamId] = useState(null);
+  const [liveTitle, setLiveTitle] = useState('');
+  const [selectedArchiveId, setSelectedArchiveId] = useState(null);
   
   // Ref برای Pusher
   const pusherRef = useRef(null);
@@ -335,6 +346,19 @@ const CutifyGlassDemo = () => {
       }
     });
     
+    // Subscribe to live-channel for live notifications
+    const liveChannel = pusherRef.current.subscribe('live-channel');
+    liveChannel.bind('live-started', (data) => {
+      setIsLiveActive(true);
+      setLiveStreamId(data.stream_id);
+      setLiveTitle(data.title || 'لایو');
+    });
+    liveChannel.bind('live-ended', (data) => {
+      setIsLiveActive(false);
+      setLiveStreamId(null);
+      setLiveTitle('');
+    });
+    
     // Subscribe to team channel for badge (admin + sub-admins)
     const myUserId = getUserIdFromToken();
     if (myUserId) {
@@ -376,6 +400,17 @@ const CutifyGlassDemo = () => {
       fetchAlphaUnreadCount();
       fetchTeamUnreadCount();
       connectPusher();
+      // چک وضعیت لایو
+      fetch(`${API_URL}/live/status`)
+        .then(r => r.json())
+        .then(data => {
+          if (data.is_live) {
+            setIsLiveActive(true);
+            setLiveStreamId(data.stream_id);
+            setLiveTitle(data.title || 'لایو');
+          }
+        })
+        .catch(() => {});
     } else {
       setUnreadCount(0);
       setPendingSubCount(0);
@@ -816,6 +851,49 @@ if (activeTab === 'projects') {
       );
     }
     
+    // صفحه تماشای لایو
+    if (activeTab === 'liveWatch') {
+      return (
+        <LivePage
+          streamId={liveStreamId}
+          onBack={() => setActiveTab('home')}
+        />
+      );
+    }
+
+    // صفحه تماشای آرشیو لایو
+    if (activeTab === 'liveWatchArchive') {
+      return (
+        <LivePage
+          streamId={selectedArchiveId}
+          onBack={() => setActiveTab('liveArchive')}
+        />
+      );
+    }
+
+    // صفحه آرشیو لایوها
+    if (activeTab === 'liveArchive') {
+      return (
+        <LiveArchive
+          onBack={() => setActiveTab('home')}
+          onWatchArchive={(id) => {
+            setSelectedArchiveId(id);
+            setActiveTab('liveWatchArchive');
+          }}
+          isAdmin={isAdmin}
+        />
+      );
+    }
+
+    // صفحه مدیریت لایو (ادمین)
+    if (activeTab === 'adminLive') {
+      return (
+        <AdminLiveManager
+          onBack={() => setActiveTab('home')}
+        />
+      );
+    }
+    
     // صفحه اصلی
     return (
       <div className="content">
@@ -887,6 +965,106 @@ if (activeTab === 'projects') {
               <span className="time-label">11</span>
             </div>
           </div>       
+        </div>
+
+        {/* Live Card - فقط وقتی لایو فعاله */}
+        {isLiveActive && (
+          <div 
+            className="quick-edit-card-glass menu-card-single"
+            onClick={() => {
+              if (!isLoggedIn) {
+                setPendingTab('liveWatch');
+                setActiveTab('profile');
+              } else {
+                setActiveTab('liveWatch');
+              }
+            }}
+            style={{ 
+              position: 'relative',
+              borderColor: 'rgba(239, 68, 68, 0.3)',
+              boxShadow: '0 0 20px rgba(239, 68, 68, 0.1)'
+            }}
+          >
+            <div className="menu-card-content">
+              <div className="menu-icon-wrapper" style={{ 
+                background: 'rgba(239, 68, 68, 0.2)',
+                border: '1px solid rgba(239, 68, 68, 0.3)',
+                position: 'relative'
+              }}>
+                <Radio size={24} style={{ color: '#ef4444' }} />
+                <span style={{
+                  position: 'absolute',
+                  top: -4,
+                  right: -4,
+                  width: 12,
+                  height: 12,
+                  borderRadius: '50%',
+                  background: '#ef4444',
+                  animation: 'livePulse 2s ease-in-out infinite',
+                  boxShadow: '0 0 8px rgba(239, 68, 68, 0.6)'
+                }}></span>
+              </div>
+              <div className="menu-text-wrapper">
+                <span className="menu-item-title" style={{ color: '#fca5a5' }}>
+                  🔴 لایو
+                </span>
+                <span className="menu-item-desc" style={{ color: 'rgba(255,255,255,0.5)', fontSize: '13px' }}>
+                  {liveTitle || 'الان لایو هستیم!'}
+                </span>
+              </div>
+            </div>
+            <ChevronRight size={22} className="menu-chevron" style={{ color: 'rgba(239, 68, 68, 0.5)' }} />
+          </div>
+        )}
+
+        {/* Admin: Live Manager Card */}
+        {isAdmin && (
+          <div 
+            className="quick-edit-card-glass menu-card-single"
+            onClick={() => setActiveTab('adminLive')}
+          >
+            <div className="menu-card-content">
+              <div className="menu-icon-wrapper" style={{ 
+                background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.2), rgba(168, 85, 247, 0.2))',
+                border: '1px solid rgba(239, 68, 68, 0.2)'
+              }}>
+                <Video size={24} style={{ color: '#f87171' }} />
+              </div>
+              <div className="menu-text-wrapper">
+                <span className="menu-item-title">مدیریت لایو</span>
+                <span className="menu-item-desc" style={{ color: 'rgba(255,255,255,0.4)', fontSize: '13px' }}>
+                  {isLiveActive ? '🔴 لایو فعال' : 'شروع لایو جدید'}
+                </span>
+              </div>
+            </div>
+            <ChevronRight size={22} className="menu-chevron" />
+          </div>
+        )}
+
+        {/* Live Archive Card */}
+        <div 
+          className="quick-edit-card-glass menu-card-single"
+          onClick={() => {
+            if (!isLoggedIn) {
+              setPendingTab('liveArchive');
+              setActiveTab('profile');
+            } else {
+              setActiveTab('liveArchive');
+            }
+          }}
+        >
+          <div className="menu-card-content">
+            <div className="menu-icon-wrapper">
+              <Video size={24} />
+            </div>
+            <div className="menu-text-wrapper">
+              <span className="menu-item-title">لایوهای قبلی</span>
+              <span className="menu-item-desc" style={{ color: 'rgba(255,255,255,0.4)', fontSize: '13px' }}>
+                آرشیو لایو استریم‌ها
+              </span>
+            </div>
+          </div>
+          <ChevronRight size={22} className="menu-chevron" />
         </div>
 
         {/* Alpha Card */}
@@ -982,7 +1160,7 @@ if (activeTab === 'projects') {
         <div className="bg-overlay"></div>
         
         {/* لایه شیشه‌ای روی بک‌گراند - در صفحه پشتیبانی و خریدها */}
-        {(activeTab === 'support' || activeTab === 'adminChat' || activeTab === 'shop' || activeTab === 'adminDiscounts' || activeTab === 'subAdminManager' || activeTab === 'adminUsers' || activeTab === 'adminNotifications' || activeTab === 'teamChat' || activeTab === 'teamChatView') && <div className="bg-glass-overlay"></div>}
+        {(activeTab === 'support' || activeTab === 'adminChat' || activeTab === 'shop' || activeTab === 'adminDiscounts' || activeTab === 'subAdminManager' || activeTab === 'adminUsers' || activeTab === 'adminNotifications' || activeTab === 'teamChat' || activeTab === 'teamChatView' || activeTab === 'liveWatch' || activeTab === 'liveWatchArchive' || activeTab === 'liveArchive' || activeTab === 'adminLive') && <div className="bg-glass-overlay"></div>}
 
         {/* Content */}
         {renderContent()}
@@ -993,7 +1171,7 @@ if (activeTab === 'projects') {
         )}
 
         {/* Bottom Navigation - مخفی در صفحه‌های تمام‌صفحه */}
-        {activeTab !== 'support' && activeTab !== 'alphaChannel' && activeTab !== 'adminChat' && activeTab !== 'subAdminManager' && activeTab !== 'adminUsers' && activeTab !== 'adminNotifications' && activeTab !== 'teamChat' && activeTab !== 'teamChatView' && activeTab !== 'settings' && (
+        {activeTab !== 'support' && activeTab !== 'alphaChannel' && activeTab !== 'adminChat' && activeTab !== 'subAdminManager' && activeTab !== 'adminUsers' && activeTab !== 'adminNotifications' && activeTab !== 'teamChat' && activeTab !== 'teamChatView' && activeTab !== 'settings' && activeTab !== 'liveWatch' && activeTab !== 'liveWatchArchive' && activeTab !== 'liveArchive' && activeTab !== 'adminLive' && (
           <div className="bottom-nav-glass">
             <div className="nav-items">
               <button 

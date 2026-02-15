@@ -2565,3 +2565,18 @@ background: rgba(255, 255, 255, 0.067);
   0%, 100% { opacity: 1; }
   50% { opacity: 0.5; }
 }
+
+/* Live Streaming Animations */
+@keyframes livePulse {
+  0%, 100% { opacity: 1; box-shadow: 0 0 8px rgba(239, 68, 68, 0.6); }
+  50% { opacity: 0.6; box-shadow: 0 0 4px rgba(239, 68, 68, 0.3); }
+}
+
+.live-spin {
+  animation: liveSpin 1s linear infinite;
+}
+
+@keyframes liveSpin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
