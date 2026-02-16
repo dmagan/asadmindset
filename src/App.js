@@ -28,6 +28,7 @@ import SettingsPage from './components/SettingsPage';
 import LivePage from './components/LivePage';
 import LiveArchive from './components/LiveArchive';
 import AdminLiveManager from './components/AdminLiveManager';
+import AIChatBot from './components/AIChatBot';
 import { authService } from './services/authService';
 import { pushService } from './services/pushService';
 import Pusher from 'pusher-js';
@@ -553,7 +554,7 @@ const CutifyGlassDemo = () => {
   // تابع برای تغییر تب با چک کردن لاگین
   const handleTabChange = (tab) => {
     // اگر تب نیاز به لاگین داره و کاربر لاگین نیست
-    const protectedTabs = ['support', 'shop']; // تب‌هایی که نیاز به لاگین دارن
+    const protectedTabs = ['support', 'shop', 'aiChat']; // تب‌هایی که نیاز به لاگین دارن
     
     if (protectedTabs.includes(tab) && !isLoggedIn) {
       // ذخیره تب مقصد و نمایش صفحه لاگین
@@ -910,6 +911,16 @@ if (activeTab === 'projects') {
         />
       );
     }
+
+    // صفحه چت‌بات AI
+    if (activeTab === 'aiChat') {
+      return (
+        <AIChatBot
+          onBack={() => setActiveTab('home')}
+          userName={user?.display_name || user?.nicename || ''}
+        />
+      );
+    }
     
     // صفحه اصلی
     return (
@@ -1177,7 +1188,7 @@ if (activeTab === 'projects') {
         <div className="bg-overlay"></div>
         
         {/* لایه شیشه‌ای روی بک‌گراند - در صفحه پشتیبانی و خریدها */}
-        {(activeTab === 'support' || activeTab === 'adminChat' || activeTab === 'shop' || activeTab === 'adminDiscounts' || activeTab === 'subAdminManager' || activeTab === 'adminUsers' || activeTab === 'adminNotifications' || activeTab === 'teamChat' || activeTab === 'teamChatView' || activeTab === 'liveWatch' || activeTab === 'liveWatchArchive' || activeTab === 'liveArchive' || activeTab === 'adminLive') && <div className="bg-glass-overlay"></div>}
+        {(activeTab === 'support' || activeTab === 'adminChat' || activeTab === 'shop' || activeTab === 'adminDiscounts' || activeTab === 'subAdminManager' || activeTab === 'adminUsers' || activeTab === 'adminNotifications' || activeTab === 'teamChat' || activeTab === 'teamChatView' || activeTab === 'liveWatch' || activeTab === 'liveWatchArchive' || activeTab === 'liveArchive' || activeTab === 'adminLive' || activeTab === 'aiChat') && <div className="bg-glass-overlay"></div>}
 
         {/* Content */}
         {renderContent()}
@@ -1188,7 +1199,7 @@ if (activeTab === 'projects') {
         )}
 
         {/* Bottom Navigation - مخفی در صفحه‌های تمام‌صفحه */}
-        {activeTab !== 'support' && activeTab !== 'alphaChannel' && activeTab !== 'adminChat' && activeTab !== 'subAdminManager' && activeTab !== 'adminUsers' && activeTab !== 'adminNotifications' && activeTab !== 'teamChat' && activeTab !== 'teamChatView' && activeTab !== 'settings' && activeTab !== 'liveWatch' && activeTab !== 'liveWatchArchive' && activeTab !== 'liveArchive' && activeTab !== 'adminLive' && (
+        {activeTab !== 'support' && activeTab !== 'alphaChannel' && activeTab !== 'adminChat' && activeTab !== 'subAdminManager' && activeTab !== 'adminUsers' && activeTab !== 'adminNotifications' && activeTab !== 'teamChat' && activeTab !== 'teamChatView' && activeTab !== 'settings' && activeTab !== 'liveWatch' && activeTab !== 'liveWatchArchive' && activeTab !== 'liveArchive' && activeTab !== 'adminLive' && activeTab !== 'aiChat' && (
           <div className="bottom-nav-glass">
             <div className="nav-items">
               <button 
@@ -1215,7 +1226,7 @@ if (activeTab === 'projects') {
               </button>
               <button 
                 className="nav-item-ios add-button-ios"
-                onClick={() => {}}
+                onClick={() => handleTabChange('aiChat')}
               >
                 <div className="add-icon-ios ai-text">
                   Ai

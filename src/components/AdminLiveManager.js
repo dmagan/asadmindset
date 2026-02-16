@@ -290,12 +290,21 @@ const AdminLiveManager = ({ onBack }) => {
   if (loading) {
     return (
       <div style={styles.container}>
-        <div style={styles.header}>
-          <button style={styles.backBtn} onClick={onBack}>
+        <div className="chat-header-glass" style={{ direction: 'rtl' }}>
+          <div className="chat-header-info">
+            <div className="chat-avatar-glass" style={{
+              background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.3), rgba(234, 179, 8, 0.3))'
+            }}>
+              <Radio size={20} />
+            </div>
+            <div className="chat-header-text">
+              <span className="chat-header-title">مدیریت لایو</span>
+              <span className="chat-header-status">در حال بارگذاری...</span>
+            </div>
+          </div>
+          <button className="chat-back-btn" onClick={onBack}>
             <ArrowLeft size={22} />
           </button>
-          <span style={styles.headerTitle}>مدیریت لایو</span>
-          <div style={{ width: 38 }} />
         </div>
         <div style={styles.center}>
           <Loader2 size={28} className="live-spin" />
@@ -307,18 +316,28 @@ const AdminLiveManager = ({ onBack }) => {
   return (
     <div style={styles.container}>
       {/* Header */}
-      <div style={styles.header}>
-        <button style={styles.backBtn} onClick={onBack}>
+      <div className="chat-header-glass" style={{ direction: 'rtl' }}>
+        <div className="chat-header-info">
+          <div className="chat-avatar-glass" style={{
+            background: currentLive?.status === 'live' 
+              ? 'linear-gradient(135deg, rgba(239, 68, 68, 0.4), rgba(239, 68, 68, 0.2))'
+              : 'linear-gradient(135deg, rgba(234, 179, 8, 0.3), rgba(139, 92, 246, 0.3))'
+          }}>
+            <Radio size={20} style={{ color: currentLive?.status === 'live' ? '#ef4444' : 'white' }} />
+          </div>
+          <div className="chat-header-text">
+            <span className="chat-header-title">مدیریت لایو</span>
+            <span className="chat-header-status">
+              {currentLive?.status === 'live' ? '🔴 لایو فعال' : currentLive ? 'آماده استریم' : 'ساخت لایو جدید'}
+            </span>
+          </div>
+        </div>
+        <button className="chat-back-btn" onClick={onBack}>
           <ArrowLeft size={22} />
         </button>
-        <div style={styles.headerCenter}>
-          <Radio size={18} style={{ color: currentLive?.status === 'live' ? '#ef4444' : 'rgba(255,255,255,0.5)' }} />
-          <span style={styles.headerTitle}>مدیریت لایو</span>
-        </div>
-        <div style={{ width: 38 }} />
       </div>
 
-      <div style={styles.scrollArea}>
+      <div className="alpha-content-area" style={{ direction: 'rtl' }}>
         {/* Error/Success messages */}
         {error && (
           <div style={styles.alertError}>
@@ -653,6 +672,20 @@ const AdminLiveManager = ({ onBack }) => {
           </>
         )}
       </div>
+
+      <style>{`
+        .alpha-content-area {
+          flex: 1;
+          overflow-y: auto;
+          overflow-x: hidden;
+          padding: 20px 16px;
+          padding-bottom: 120px;
+          -webkit-overflow-scrolling: touch;
+        }
+        .alpha-content-area::-webkit-scrollbar {
+          display: none;
+        }
+      `}</style>
     </div>
   );
 };
@@ -665,14 +698,10 @@ const styles = {
     display: 'flex',
     flexDirection: 'column',
     height: '100%',
-    position: 'fixed',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    zIndex: 10,
+    position: 'relative',
+    zIndex: 5,
     overflow: 'hidden',
-    background: '#0a0a0a',
+    direction: 'rtl',
   },
   header: {
     display: 'flex',
@@ -720,7 +749,7 @@ const styles = {
     flex: 1,
     overflowY: 'auto',
     padding: '16px',
-    paddingBottom: 'max(16px, env(safe-area-inset-bottom))',
+    paddingBottom: 120,
     display: 'flex',
     flexDirection: 'column',
     gap: 16,
@@ -762,15 +791,17 @@ const styles = {
     padding: '0 4px',
   },
 
-  // Sections
+  // Sections - glassmorphism
   section: {
-    background: 'rgba(255, 255, 255, 0.04)',
-    border: '1px solid rgba(255, 255, 255, 0.08)',
+    background: 'rgba(255, 255, 255, 0.07)',
+    border: '1px solid rgba(255, 255, 255, 0.12)',
     borderRadius: 16,
     padding: 16,
     display: 'flex',
     flexDirection: 'column',
     gap: 12,
+    backdropFilter: 'blur(4px)',
+    WebkitBackdropFilter: 'blur(4px)',
   },
   sectionTitle: {
     display: 'flex',
@@ -805,10 +836,10 @@ const styles = {
     direction: 'rtl',
   },
   input: {
-    background: 'rgba(255, 255, 255, 0.06)',
-    border: '1px solid rgba(255, 255, 255, 0.1)',
-    borderRadius: 10,
-    padding: '10px 14px',
+    background: 'rgba(255, 255, 255, 0.08)',
+    border: '1px solid rgba(255, 255, 255, 0.12)',
+    borderRadius: 12,
+    padding: '12px 14px',
     color: 'white',
     fontSize: 14,
     outline: 'none',
@@ -816,10 +847,10 @@ const styles = {
     direction: 'auto',
   },
   textarea: {
-    background: 'rgba(255, 255, 255, 0.06)',
-    border: '1px solid rgba(255, 255, 255, 0.1)',
-    borderRadius: 10,
-    padding: '10px 14px',
+    background: 'rgba(255, 255, 255, 0.08)',
+    border: '1px solid rgba(255, 255, 255, 0.12)',
+    borderRadius: 12,
+    padding: '12px 14px',
     color: 'white',
     fontSize: 14,
     outline: 'none',
@@ -845,13 +876,15 @@ const styles = {
 
   // Status Card
   statusCard: {
-    background: 'rgba(255, 255, 255, 0.04)',
+    background: 'rgba(255, 255, 255, 0.07)',
     border: '1px solid',
     borderRadius: 16,
     padding: 16,
     display: 'flex',
     flexDirection: 'column',
     gap: 10,
+    backdropFilter: 'blur(4px)',
+    WebkitBackdropFilter: 'blur(4px)',
   },
   statusRow: {
     display: 'flex',
@@ -903,11 +936,13 @@ const styles = {
     gap: 8,
     padding: '20px 12px',
     borderRadius: 14,
-    border: '1px solid rgba(255, 255, 255, 0.1)',
-    background: 'rgba(255, 255, 255, 0.04)',
+    border: '1px solid rgba(255, 255, 255, 0.12)',
+    background: 'rgba(255, 255, 255, 0.07)',
     cursor: 'pointer',
     transition: 'all 0.2s',
     fontFamily: 'inherit',
+    backdropFilter: 'blur(4px)',
+    WebkitBackdropFilter: 'blur(4px)',
   },
   modeBtnTitle: {
     color: 'white',
@@ -942,10 +977,10 @@ const styles = {
   },
   copyInput: {
     flex: 1,
-    background: 'rgba(0, 0, 0, 0.3)',
+    background: 'rgba(0, 0, 0, 0.2)',
     border: '1px solid rgba(255, 255, 255, 0.1)',
-    borderRadius: 8,
-    padding: '8px 10px',
+    borderRadius: 10,
+    padding: '8px 12px',
     color: 'rgba(255, 255, 255, 0.7)',
     fontSize: 12,
     fontFamily: 'monospace',
@@ -1051,8 +1086,8 @@ const styles = {
     gap: 8,
     padding: '12px 20px',
     borderRadius: 12,
-    border: '1px solid rgba(239, 68, 68, 0.3)',
-    background: 'rgba(239, 68, 68, 0.1)',
+    border: '1px solid rgba(239, 68, 68, 0.25)',
+    background: 'rgba(239, 68, 68, 0.08)',
     color: '#fca5a5',
     fontSize: 14,
     fontWeight: 600,

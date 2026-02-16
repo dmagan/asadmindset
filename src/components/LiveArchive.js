@@ -191,11 +191,12 @@ const LiveArchive = ({ onBack, onWatchArchive, isAdmin }) => {
       {showTrash && isAdmin && (
         <div style={{
           margin:'10px 16px', borderRadius:12, overflow:'hidden',
-          background:'rgba(239,68,68,0.04)',
-          border:'1px solid rgba(239,68,68,0.1)',
+          background:'rgba(0, 0, 0, 0.72)',
+          border:'1px solid rgba(255, 255, 255, 0.3)',
           maxHeight:220, overflowY:'auto',
+          backdropFilter:'blur(16px)', WebkitBackdropFilter:'blur(16px)', 
         }}>
-          <div style={{ display:'flex',alignItems:'center',gap:6,padding:'10px 14px',borderBottom:'1px solid rgba(255,255,255,0.04)' }}>
+          <div style={{ display:'flex',alignItems:'center',gap:6,padding:'10px 14px',borderBottom:'1px solid rgba(255, 255, 255, 0.2)' }}>
             <Trash2 size={13} style={{color:'#ef4444'}} />
             <span style={{ fontSize:12,fontWeight:600,color:'#ef4444',flex:1 }}>سطل آشغال</span>
             <span style={{ fontSize:10,color:'rgba(255,255,255,0.3)' }}>{trashCount} مورد</span>
@@ -205,13 +206,13 @@ const LiveArchive = ({ onBack, onWatchArchive, isAdmin }) => {
           ) : trashItems.length === 0 ? (
             <div style={{padding:16,textAlign:'center',color:'rgba(255,255,255,0.2)',fontSize:12}}>سطل آشغال خالیست</div>
           ) : trashItems.map(item => (
-            <div key={item.id} style={{ display:'flex',alignItems:'center',gap:10,padding:'8px 14px',borderBottom:'1px solid rgba(255,255,255,0.03)' }}>
-              <div style={{ width:40,height:26,borderRadius:5,overflow:'hidden',background:'rgba(255,255,255,0.05)',flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center' }}>
+            <div key={item.id} style={{ display:'flex',alignItems:'center',gap:10,padding:'10px 14px',borderBottom:'1px solid rgba(239,68,68,0.08)' }}>
+              <div style={{ width:42,height:28,borderRadius:6,overflow:'hidden',background:'rgba(255,255,255,0.08)',flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center' }}>
                 {item.thumbnail_url ? <img src={item.thumbnail_url} alt="" style={{width:'100%',height:'100%',objectFit:'cover'}} onError={e=>e.target.style.display='none'} /> : <Video size={11} style={{opacity:0.2,color:'white'}} />}
               </div>
               <div style={{flex:1,minWidth:0}}>
-                <div style={{ fontSize:11,fontWeight:500,color:'rgba(255,255,255,0.5)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{item.title}</div>
-                <div style={{ fontSize:9,color:'rgba(255,255,255,0.2)' }}>{timeAgo(item.trashed_at)}</div>
+                <div style={{ fontSize:12,fontWeight:500,color:'rgba(255,255,255,0.8)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{item.title}</div>
+                <div style={{ fontSize:10,color:'rgba(255,255,255,0.4)' }}>{timeAgo(item.trashed_at)}</div>
               </div>
               {confirmId===item.id&&confirmAction==='permDelete' ? (
                 <div style={{display:'flex',alignItems:'center',gap:6}}>
@@ -362,7 +363,7 @@ const LiveArchive = ({ onBack, onWatchArchive, isAdmin }) => {
                         {/* Trash */}
                         <button onClick={(e)=>{e.stopPropagation();setConfirmId(stream.id);setConfirmAction('trash');}}
                           style={{
-                            background:'rgba(239,68,68,0.08)', border:'none', color:'#ef4444',
+                            background:'rgba(25, 25, 25, 0.21)', border:'none', color:'#ef4444',
                             width:36,height:36,borderRadius:9,
                             display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',
                           }}>
@@ -371,7 +372,7 @@ const LiveArchive = ({ onBack, onWatchArchive, isAdmin }) => {
                         {/* Edit */}
                         <button onClick={(e)=>{e.stopPropagation();startEdit(stream);}}
                           style={{
-                            background:'rgba(139,92,246,0.08)', border:'none', color:'#a78bfa',
+                            background:'rgba(25, 25, 25, 0.21)',  border:'none', color:'#a78bfa',
                             width:36,height:36,borderRadius:9,
                             display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',
                           }}>
@@ -380,7 +381,7 @@ const LiveArchive = ({ onBack, onWatchArchive, isAdmin }) => {
                         {/* Visibility */}
                         <button onClick={(e)=>{e.stopPropagation();handleToggleVisibility(stream.id);}} disabled={actionId===stream.id}
                           style={{
-                            background: stream.is_visible === false ? 'rgba(234,179,8,0.08)' : 'rgba(34,197,94,0.08)',
+                            background: stream.is_visible === false ? 'rgba(234, 178, 8, 0.23)' : 'rgba(34, 197, 94, 0.22)',
                             border:'none',
                             color: stream.is_visible === false ? '#eab308' : '#22c55e',
                             width:36,height:36,borderRadius:9,
