@@ -6,8 +6,7 @@ const isLocalhost = Boolean(
   )
 );
 
-// Flag to prevent infinite reload loops
-let isReloading = false;
+let waitingRegistration = null;
 
 export function register(config) {
   if ('serviceWorker' in navigator) {
@@ -21,14 +20,11 @@ export function register(config) {
       }
     });
 
-    // گوش بده به پیام SW_UPDATED از Service Worker
+    // When SW activates after user accepted update → reload
     navigator.serviceWorker.addEventListener('message', (event) => {
-      if (event.data && event.data.type === 'SW_UPDATED') {
-        console.log(`[App] SW updated to version ${event.data.version}, reloading...`);
-        if (!isReloading) {
-          isReloading = true;
-          window.location.reload();
-        }
+      if (event.data && event.data.type === 'SW_ACTIVATED') {
+        console.log(`[App] SW activated v${event.data.version}, reloading...`);
+        window.location.reload();
       }
     });
   }
@@ -38,16 +34,10 @@ function registerValidSW(swUrl, config) {
   navigator.serviceWorker
     .register(swUrl)
     .then(registration => {
-      // هر 60 ثانیه چک کن آپدیت جدید هست یا نه
-      setInterval(() => {
-        registration.update();
-      }, 60 * 1000);
+      setInterval(() => { registration.update(); }, 60 * 1000);
 
-      // وقتی اپ دوباره visible میشه هم چک کن
       document.addEventListener('visibilitychange', () => {
-        if (document.visibilityState === 'visible') {
-          registration.update();
-        }
+        if (document.visibilityState === 'visible') registration.update();
       });
 
       registration.onupdatefound = () => {
@@ -57,8 +47,10 @@ function registerValidSW(swUrl, config) {
         installingWorker.onstatechange = () => {
           if (installingWorker.state === 'installed') {
             if (navigator.serviceWorker.controller) {
-              // نسخه جدید آماده‌ست - SW خودش رفرش می‌کنه via postMessage
-              console.log('🔄 New version available, waiting for SW activation...');
+              console.log('🔄 New version available!');
+              waitingRegistration = registration;
+              window.dispatchEvent(new CustomEvent('swUpdateAvailable'));
+              if (config && config.onUpdate) config.onUpdate(registration);
             } else {
               console.log('✅ App cached for offline use');
             }
@@ -79,15 +71,18 @@ function checkValidServiceWorker(swUrl, config) {
         response.headers.get('content-type').indexOf('javascript') === -1
       ) {
         navigator.serviceWorker.ready.then(registration => {
-          registration.unregister().then(() => {
-            window.location.reload();
-          });
+          registration.unregister().then(() => { window.location.reload(); });
         });
       } else {
         registerValidSW(swUrl, config);
       }
     })
-    .catch(() => {
-      console.log('Offline mode enabled');
-    });
+    .catch(() => { console.log('Offline mode enabled'); });
+}
+
+// User clicked update → tell SW to skip waiting
+export function applyUpdate() {
+  if (waitingRegistration && waitingRegistration.waiting) {
+    waitingRegistration.waiting.postMessage({ type: 'SKIP_WAITING' });
+  }
 }

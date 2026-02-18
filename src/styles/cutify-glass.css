@@ -55,6 +55,13 @@ html, body {
   -webkit-tap-highlight-color: transparent;
 }
 
+/* Fix: Allow text selection/typing in inputs, textareas, and contenteditable */
+input, textarea, select, [contenteditable="true"] {
+  -webkit-user-select: text !important;
+  -ms-user-select: text !important;
+  user-select: text !important;
+}
+
 
         * {
           margin: 0;

@@ -13,7 +13,8 @@ import {
   TrendingDown,
 Infinity,
 Combine,
-Signal
+Signal,
+Landmark
 } from 'lucide-react';
 
 const AlphaPage = ({ onBack, onOpenChannel }) => {
@@ -39,9 +40,7 @@ const AlphaPage = ({ onBack, onOpenChannel }) => {
   const includedFeatures = [
         'VIP',
     'سیگنال اسپات ( معرفی  آلت‌ کوین های پامپی برای آلت سیزن )',
-    'میم‌کوین‌های پامپی', 
     'کپی‌ترید',
-    'ایردراپ‌',
     'سیگنال‌های فیوچرز برای درآمد ماهانه',
   ];
 
@@ -81,10 +80,15 @@ const AlphaPage = ({ onBack, onOpenChannel }) => {
 
           {/* Spot Signals Card */}
           <div className="quick-edit-card-glass" style={styles.spotCard}>
+            {/* ترید بازارهای بزرگ */}
             <div style={styles.spotHeader}>
-              <div style={styles.spotIcon}>
-                <TrendingUp size={24} />
-              </div>
+              <Landmark size={24} style={{ color: '#ffffff', flexShrink: 0 }} />
+              <span style={styles.spotTitle}>ترید بازارهای بزرگ (طلا - نقره - Nasdaq - S&P - Dow Jones و ...)</span>
+            </div>
+
+            {/* سیگنال‌های اسپات */}
+            <div style={styles.spotHeader}>
+              <TrendingUp size={24} style={{ color: '#ffffff', flexShrink: 0 }} />
               <span style={styles.spotTitle}>سیگنال‌های اسپات (سبد آلت‌سیزن)</span>
             </div>
             
@@ -92,32 +96,22 @@ const AlphaPage = ({ onBack, onOpenChannel }) => {
             <div style={styles.featuresGrid}>
               <div style={styles.featureRow}>
                 <div style={styles.featureBox}>
-                  <Zap size={48} style={{ color: '#ffffff' }} />
-                  <span>معرفی میم‌کوین‌های پامپی</span>
-                </div>
-                <div style={styles.featureBox}>
                   <Signal size={48} style={{ color: '#ffffff' }} />
                   <span>سیگنال‌های کوتاه‌مدت و بلندمدت</span>
                 </div>
-              </div>
-              
-              <div style={styles.featureRow}>
                 <div style={styles.featureBox}>
                   <Rocket size={28} style={{ color: '#ffffff' }} />
                   <span>سیگنال‌های فیوچرز</span>
                 </div>
+              </div>
+              
+              <div style={styles.featureRowSingle}>
                 <div style={styles.featureBox}>
                   <Copy size={28} style={{ color: '#ffffff' }} />
                   <span>کپی‌ترید</span>
                 </div>
               </div>
               
-              <div style={styles.featureRowSingle}>
-                <div style={styles.featureBox}>
-                  <Gift size={28} style={{ color: '#ffffff' }} />
-                  <span>ایردراپ‌ها</span>
-                </div>
-              </div>
             </div>
           </div>
 

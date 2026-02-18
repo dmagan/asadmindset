@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { ArrowLeft, Send, Loader2, Bot, Trash2, StopCircle } from 'lucide-react';
+import { authService } from '../services/authService';
 
-const KIMI_API_URL = 'https://api.moonshot.cn/v1/chat/completions';
-const KIMI_API_KEY = 'sk-m9QIC3zPql5zOIALDaM3OzyftZX1ywuMcRIIFEmtwkpwiuf2';
+const API_URL = 'https://asadmindset.com/wp-json/asadmindset/v1';
 
 const AIChatBot = ({ onBack, userName }) => {
   const [messages, setMessages] = useState([]);
@@ -16,24 +16,37 @@ const AIChatBot = ({ onBack, userName }) => {
   // System prompt
   const systemPrompt = {
     role: 'system',
-    content: `تو یک دستیار هوشمند هستی به نام "اسد AI". تو به زبان فارسی پاسخ می‌دهی مگر اینکه کاربر به زبان دیگری بنویسد. پاسخ‌هایت مختصر، مفید و دوستانه هستند. اگر سوالی درباره ارز دیجیتال، ترید یا بازار مالی باشد، تحلیل دقیق و حرفه‌ای ارائه بده.${userName ? ` نام کاربر: ${userName}` : ''}`
+    content: `تو یک دستیار هوشمند تخصصی بازارهای مالی هستی به نام "اسد AI".
+
+حوزه تخصص تو فقط و فقط شامل این موارد است:
+- ارزهای دیجیتال (بیتکوین، اتریوم، آلتکوین‌ها، DeFi، NFT، Web3)
+- فارکس (جفت ارزها، تحلیل تکنیکال، فاندامنتال)
+- بورس و سهام (بورس ایران، بورس‌های جهانی)
+- تحلیل تکنیکال و فاندامنتال
+- استراتژی‌های معاملاتی (اسکالپ، سوینگ، پوزیشن)
+- مدیریت ریسک و سرمایه
+- اصطلاحات مالی و آموزش ترید
+- اخبار و رویدادهای اقتصادی مرتبط با بازارها
+- روانشناسی معامله‌گری
+
+قوانین مهم:
+1. اگر کاربر سلام کرد، احوالپرسی کرد، یا صحبت دوستانه کرد → خوشرو و گرم جواب بده
+2. اگر سوالی خارج از حوزه بازارهای مالی پرسید (مثلاً آشپزی، برنامه‌نویسی، پزشکی، تاریخ و...) → بگو "متأسفانه من فقط در حوزه بازارهای مالی آموزش دیدم و نمی‌تونم در این مورد کمکت کنم. ولی اگه سوالی درباره ترید، ارز دیجیتال، فارکس یا بورس داری، در خدمتم! 📊"
+3. به زبان فارسی جواب بده مگر اینکه کاربر به زبان دیگری بنویسد
+4. پاسخ‌هایت حرفه‌ای، دقیق و کاربردی باشند
+5. هرگز توصیه مالی مستقیم نده (مثل "فلان رو بخر"). بجاش تحلیل ارائه بده و بگو تصمیم نهایی با خود کاربر است
+${userName ? `\nنام کاربر: ${userName}` : ''}`
   };
 
-  // Auto scroll to bottom
+  // Auto scroll
   const scrollToBottom = useCallback(() => {
     if (messagesEndRef.current) {
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, []);
 
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages, scrollToBottom]);
-
-  // Focus input on mount
-  useEffect(() => {
-    setTimeout(() => inputRef.current?.focus(), 300);
-  }, []);
+  useEffect(() => { scrollToBottom(); }, [messages, scrollToBottom]);
+  useEffect(() => { setTimeout(() => inputRef.current?.focus(), 300); }, []);
 
   // Send message with streaming
   const sendMessage = async () => {
@@ -46,10 +59,9 @@ const AIChatBot = ({ onBack, userName }) => {
     setIsLoading(true);
     setIsStreaming(true);
 
-    // Build messages array for API
     const apiMessages = [
       systemPrompt,
-      ...messages.slice(-20), // last 20 messages for context
+      ...messages.slice(-20),
       userMsg
     ];
 
@@ -60,25 +72,20 @@ const AIChatBot = ({ onBack, userName }) => {
       const controller = new AbortController();
       abortRef.current = controller;
 
-      const res = await fetch(KIMI_API_URL, {
+      const token = authService.getToken();
+      const res = await fetch(`${API_URL}/ai/chat-stream`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${KIMI_API_KEY}`
+          'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({
-          model: 'kimi-k2-0711-preview',
-          messages: apiMessages,
-          stream: true,
-          temperature: 0.7,
-          max_tokens: 2048,
-        }),
+        body: JSON.stringify({ messages: apiMessages }),
         signal: controller.signal,
       });
 
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.error?.message || `خطا: ${res.status}`);
+        throw new Error(errData.error || `خطا: ${res.status}`);
       }
 
       const reader = res.body.getReader();
@@ -93,7 +100,7 @@ const AIChatBot = ({ onBack, userName }) => {
         const lines = chunk.split('\n').filter(l => l.trim().startsWith('data:'));
 
         for (const line of lines) {
-          const data = line.replace('data: ', '').trim();
+          const data = line.replace(/^data:\s*/, '').trim();
           if (data === '[DONE]') break;
 
           try {
@@ -113,32 +120,31 @@ const AIChatBot = ({ onBack, userName }) => {
         }
       }
 
-      // If no content received, show error
       if (!fullContent) {
         setMessages(prev => {
           const updated = [...prev];
-          updated[updated.length - 1] = { role: 'assistant', content: 'متأسفانه پاسخی دریافت نشد. لطفاً دوباره تلاش کنید.' };
+          updated[updated.length - 1] = { role: 'assistant', content: 'پاسخی دریافت نشد. لطفاً دوباره تلاش کنید.' };
           return updated;
         });
       }
 
     } catch (e) {
       if (e.name === 'AbortError') {
-        // User stopped
+        // User stopped - keep what we have
         setMessages(prev => {
           const updated = [...prev];
           const last = updated[updated.length - 1];
-          if (last && last.role === 'assistant' && !last.content) {
-            updated[updated.length - 1] = { role: 'assistant', content: 'متوقف شد.' };
+          if (last?.role === 'assistant' && !last.content) {
+            updated[updated.length - 1] = { role: 'assistant', content: '⏹ متوقف شد.' };
           }
           return updated;
         });
       } else {
-        console.error('Kimi API error:', e);
+        console.error('AI Chat error:', e);
         setMessages(prev => {
           const updated = [...prev];
           const last = updated[updated.length - 1];
-          if (last && last.role === 'assistant') {
+          if (last?.role === 'assistant') {
             if (!last.content) {
               updated[updated.length - 1] = { role: 'assistant', content: `خطا: ${e.message}` };
             }
@@ -156,9 +162,7 @@ const AIChatBot = ({ onBack, userName }) => {
   };
 
   const stopStreaming = () => {
-    if (abortRef.current) {
-      abortRef.current.abort();
-    }
+    if (abortRef.current) abortRef.current.abort();
   };
 
   const clearChat = () => {
@@ -227,7 +231,7 @@ const AIChatBot = ({ onBack, userName }) => {
             <Bot size={20} />
           </div>
           <div className="chat-header-text">
-            <span className="chat-header-title">اسد AI</span>
+            <span className="chat-header-title">سیگنال اسپات</span>
             <span className="chat-header-status">
               {isStreaming ? 'در حال تایپ...' : 'دستیار هوشمند'}
             </span>
@@ -264,46 +268,10 @@ const AIChatBot = ({ onBack, userName }) => {
             display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
             padding: '60px 20px', gap: 16, textAlign: 'center',
           }}>
-            <div style={{
-              width: 70, height: 70, borderRadius: '50%',
-              background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.2), rgba(139, 92, 246, 0.2))',
-              border: '1px solid rgba(139, 92, 246, 0.2)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
-            }}>
-              <Bot size={32} style={{ color: '#a78bfa' }} />
-            </div>
+            <Bot size={40} style={{ color: '#a78bfa' }} />
             <div style={{ color: 'white', fontSize: 18, fontWeight: 700 }}>سلام{userName ? ` ${userName}` : ''}!</div>
             <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: 13, lineHeight: 1.8, maxWidth: 280 }}>
               من دستیار هوشمند اسد هستم. هر سوالی داری بپرس — از تحلیل بازار و ترید گرفته تا هر موضوع دیگه‌ای.
-            </div>
-
-            {/* Quick suggestions */}
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'center', marginTop: 8 }}>
-              {[
-                'تحلیل بیتکوین',
-                'بهترین استراتژی ترید',
-                'آموزش DeFi',
-                'تفاوت اسپات و فیوچرز',
-              ].map((suggestion) => (
-                <button
-                  key={suggestion}
-                  onClick={() => { setInput(suggestion); setTimeout(() => inputRef.current?.focus(), 100); }}
-                  style={{
-                    background: 'rgba(255,255,255,0.06)',
-                    border: '1px solid rgba(255,255,255,0.1)',
-                    borderRadius: 20,
-                    padding: '8px 16px',
-                    color: 'rgba(255,255,255,0.6)',
-                    fontSize: 12,
-                    cursor: 'pointer',
-                    fontFamily: 'inherit',
-                    transition: 'all 0.2s',
-                  }}
-                >
-                  {suggestion}
-                </button>
-              ))}
             </div>
           </div>
         )}
@@ -466,7 +434,7 @@ const AIChatBot = ({ onBack, userName }) => {
                 width: 38, height: 38,
                 borderRadius: 12,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                cursor: input.trim() ? 'pointer' : 'default',
+                cursor: input.trim() && !isLoading ? 'pointer' : 'default',
                 flexShrink: 0,
                 transition: 'all 0.2s',
               }}

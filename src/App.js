@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+import { applyUpdate } from './serviceWorkerRegistration';
 import UploadModal from './UploadModal';
 import IOSAddToHome from './IOSAddToHome';
 import VideoUploadCard from './VideoUploadCard.js';
@@ -59,6 +60,7 @@ import {
 const CutifyGlassDemo = () => {
   const { t, i18n } = useTranslation();
   const [activeTab, setActiveTab] = useState('home');
+  const [showUpdateBanner, setShowUpdateBanner] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(102);
   const [showUploadModal, setShowUploadModal] = useState(false);
@@ -77,10 +79,15 @@ const CutifyGlassDemo = () => {
     if (window.hideSplashLoader) {
       window.hideSplashLoader();
     }
+
+    // Listen for SW update available
+    const handleSwUpdate = () => setShowUpdateBanner(true);
+    window.addEventListener('swUpdateAvailable', handleSwUpdate);
     
     return () => {
       window.removeEventListener('imageZoomOpen', handleZoomOpen);
       window.removeEventListener('imageZoomClose', handleZoomClose);
+      window.removeEventListener('swUpdateAvailable', handleSwUpdate);
     };
   }, []);
 
@@ -1188,9 +1195,47 @@ if (activeTab === 'projects') {
         <div className="bg-overlay"></div>
         
         {/* لایه شیشه‌ای روی بک‌گراند - در صفحه پشتیبانی و خریدها */}
-        {(activeTab === 'support' || activeTab === 'adminChat' || activeTab === 'shop' || activeTab === 'adminDiscounts' || activeTab === 'subAdminManager' || activeTab === 'adminUsers' || activeTab === 'adminNotifications' || activeTab === 'teamChat' || activeTab === 'teamChatView' || activeTab === 'liveWatch' || activeTab === 'liveWatchArchive' || activeTab === 'liveArchive' || activeTab === 'adminLive' || activeTab === 'aiChat') && <div className="bg-glass-overlay"></div>}
+        {(activeTab === 'support' || activeTab === 'adminChat' || activeTab === 'shop' || activeTab === 'adminDiscounts' || activeTab === 'subAdminManager' || activeTab === 'adminUsers' || activeTab === 'adminNotifications' || activeTab === 'teamChat' || activeTab === 'teamChatView' || activeTab === 'liveWatch' || activeTab === 'liveWatchArchive' || activeTab === 'liveArchive' || activeTab === 'adminLive') && <div className="bg-glass-overlay"></div>}
 
         {/* Content */}
+
+        {/* Update Banner */}
+        {showUpdateBanner && (
+          <div style={{
+            position: 'fixed',
+            top: 'env(safe-area-inset-top, 0px)',
+            left: 0, right: 0,
+            zIndex: 99998,
+            padding: '8px 16px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            background: 'rgba(16, 185, 129, 0.95)',
+            backdropFilter: 'blur(10px)',
+            WebkitBackdropFilter: 'blur(10px)',
+            boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
+          }}>
+            <span style={{ color: 'white', fontSize: 13, fontWeight: 600 }}>
+              🔄 نسخه جدید موجوده
+            </span>
+            <button
+              onClick={() => { setShowUpdateBanner(false); applyUpdate(); }}
+              style={{
+                background: 'rgba(255,255,255,0.2)',
+                border: '1px solid rgba(255,255,255,0.3)',
+                borderRadius: 8,
+                color: 'white',
+                padding: '6px 14px',
+                fontSize: 12,
+                fontWeight: 700,
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+              }}
+            >
+              بروزرسانی
+            </button>
+          </div>
+        )}
         {renderContent()}
 
         {/* Push notification permission prompt */}
@@ -1226,7 +1271,11 @@ if (activeTab === 'projects') {
               </button>
               <button 
                 className="nav-item-ios add-button-ios"
-                onClick={() => handleTabChange('aiChat')}
+                onClick={() => {
+                  if (isAdmin || hasPermission('support') || hasPermission('channel')) {
+                    handleTabChange('aiChat');
+                  }
+                }}
               >
                 <div className="add-icon-ios ai-text">
                   Ai

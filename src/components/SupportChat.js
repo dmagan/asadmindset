@@ -28,6 +28,7 @@ const SupportChat = ({ onBack, onMessagesRead, onUnreadCountChange }) => {
   const [isOtherTyping, setIsOtherTyping] = useState(false);
   const [isOtherRecording, setIsOtherRecording] = useState(false);
   const typingTimeoutRef = useRef(null);
+  const readByAdminIdsRef = useRef(new Set());
   const lastTypingSentRef = useRef(0);
   
   // Menu states
@@ -357,7 +358,6 @@ useEffect(() => {
     
     // Messages read by admin
     // Track read message IDs that arrived before optimistic update resolved
-    const readByAdminIdsRef = useRef(new Set());
     
     channelRef.current.bind('messages-read', (data) => {
       if (data.readBy === 'admin') {

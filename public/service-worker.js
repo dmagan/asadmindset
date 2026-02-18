@@ -1,8 +1,11 @@
 // ==============================
 // 🔄 VERSION - هر بار بیلد جدید این عدد رو عوض کن!
+// آخرش 'i' بذار = آپدیت اجباری بدون سوال
+// مثال: '5' = بنر بروزرسانی | '5i' = آپدیت فوری
 // ==============================
-const APP_VERSION = '5';
+const APP_VERSION = '4';
 const CACHE_NAME = `asadmindset-shell-v${APP_VERSION}`;
+const FORCE_UPDATE = APP_VERSION.endsWith('i');
 
 const SHELL_FILES = [
   '/',
@@ -17,8 +20,15 @@ self.addEventListener('install', (event) => {
       return cache.addAll(SHELL_FILES);
     })
   );
-  // فوری فعال شو، منتظر بسته شدن تب‌ها نشو
-  self.skipWaiting();
+  // Don't skipWaiting here - unless force update
+  if (FORCE_UPDATE) self.skipWaiting();
+});
+
+// Listen for skip waiting message from client
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
 });
 
 // Activate: پاک کردن کش‌های قدیمی + اطلاع به کلاینت
@@ -35,13 +45,12 @@ self.addEventListener('activate', (event) => {
           })
       );
     }).then(() => {
-      // کنترل تمام تب‌های باز رو بگیر
       return self.clients.claim();
     }).then(() => {
-      // به تمام تب‌های باز بگو رفرش کنن
+      // به تمام تب‌ها بگو رفرش کنن
       return self.clients.matchAll({ type: 'window' }).then((clients) => {
         clients.forEach((client) => {
-          client.postMessage({ type: 'SW_UPDATED', version: APP_VERSION });
+          client.postMessage({ type: 'SW_ACTIVATED', version: APP_VERSION });
         });
       });
     })

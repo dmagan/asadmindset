@@ -24,7 +24,8 @@ import {
   Plus,
   UserPlus,
   Tag,
-  Globe
+  Globe,
+  Copy
 } from 'lucide-react';
 import { authService } from '../services/authService';
 
@@ -803,6 +804,100 @@ const AdminSubscriptionManager = ({ onBack, onPendingCountChange, onNavigateToDi
                     })()}
                     <span style={{ marginRight: 'auto' }}>{formatDate(sub.createdAt)}</span>
                   </div>
+
+                  {/* Tx Hash */}
+                  {sub.txHash && (
+                    <div style={{
+                      display: 'flex', alignItems: 'center', gap: 6,
+                      padding: '6px 10px', marginTop: 6, marginBottom: 12,
+                      background: 'rgba(255,255,255,0.04)',
+                      borderRadius: 8,
+                      border: '1px solid rgba(255,255,255,0.06)',
+                    }}>
+                      <span style={{ color: 'rgba(255,255,255,0.35)', fontSize: 10, flexShrink: 0 }}>هش:</span>
+                      <span style={{
+                        color: 'rgba(255,255,255,0.6)', fontSize: 11,
+                        fontFamily: 'monospace', direction: 'ltr',
+                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                        flex: 1, minWidth: 0,
+                      }}>
+                        {sub.txHash}
+                      </span>
+                      <button
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          const text = sub.txHash;
+                          const btn = e.currentTarget;
+                          let copied = false;
+
+                          // Save body styles (iOS scroll fix may set position:fixed)
+                          const origPosition = document.body.style.position;
+                          const origWidth = document.body.style.width;
+                          const origHeight = document.body.style.height;
+                          document.body.style.position = '';
+                          document.body.style.width = '';
+                          document.body.style.height = '';
+
+                          // Method 1: Clipboard API
+                          if (!copied && navigator.clipboard && navigator.clipboard.writeText) {
+                            try {
+                              await navigator.clipboard.writeText(text);
+                              copied = true;
+                            } catch (err) {}
+                          }
+
+                          // Method 2: contentEditable div (best for iOS)
+                          if (!copied) {
+                            const el = document.createElement('div');
+                            el.contentEditable = 'true';
+                            el.readOnly = false;
+                            el.textContent = text;
+                            el.style.cssText = 'position:fixed;top:0;left:-9999px;font-size:16px;opacity:0;';
+                            document.body.appendChild(el);
+                            
+                            const range = document.createRange();
+                            range.selectNodeContents(el);
+                            const sel = window.getSelection();
+                            sel.removeAllRanges();
+                            sel.addRange(range);
+                            
+                            // iOS specific
+                            el.setSelectionRange && el.setSelectionRange(0, text.length);
+                            
+                            try {
+                              copied = document.execCommand('copy');
+                            } catch (err) {}
+                            
+                            sel.removeAllRanges();
+                            document.body.removeChild(el);
+                          }
+
+                          // Restore body styles
+                          document.body.style.position = origPosition;
+                          document.body.style.width = origWidth;
+                          document.body.style.height = origHeight;
+
+                          if (copied) {
+                            btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+                            btn.style.color = '#22c55e';
+                            setTimeout(() => {
+                              btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg>';
+                              btn.style.color = 'rgba(255,255,255,0.4)';
+                            }, 1500);
+                          }
+                        }}
+                        style={{
+                          background: 'none', border: 'none',
+                          color: 'rgba(255,255,255,0.4)',
+                          padding: 4, cursor: 'pointer', flexShrink: 0,
+                          display: 'flex', alignItems: 'center',
+                          transition: 'color 0.2s',
+                        }}
+                      >
+                        <Copy size={13} />
+                      </button>
+                    </div>
+                  )}
 
                   {/* Bottom Row: Action Buttons */}
                   <div style={{ display: 'flex', gap: '8px' }}>
