@@ -188,6 +188,42 @@ const CutifyGlassDemo = () => {
   useEffect(() => {
     activeTabRef.current = activeTab;
   }, [activeTab]);
+
+  // ───── Android Back Button Support ─────
+  // هر بار که activeTab عوض می‌شه (و home نیست)، یه history entry اضافه کن
+  // iOS: دکمه Back فیزیکی ندارد → این کد روی iOS تأثیری نمی‌گذارد
+  const prevTabRef = useRef('home');
+  useEffect(() => {
+    const isAndroid = /Android/i.test(navigator.userAgent);
+    if (!isAndroid) return; // فقط برای Android فعال باشه
+
+    if (activeTab !== 'home') {
+      // pushState جدید فقط اگر tab واقعاً عوض شده
+      if (prevTabRef.current !== activeTab) {
+        window.history.pushState({ tab: activeTab }, '');
+      }
+    }
+    prevTabRef.current = activeTab;
+  }, [activeTab]);
+
+  // گوش دادن به Back button اندروید
+  useEffect(() => {
+    const isAndroid = /Android/i.test(navigator.userAgent);
+    if (!isAndroid) return;
+
+    const handlePopState = (e) => {
+      if (e.state && e.state.tab) {
+        setActiveTab(e.state.tab);
+      } else {
+        // به home برگرد، مرورگر خودش از اپ خارج می‌شه اگه دوباره Back بزنه
+        setActiveTab('home');
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+  // ───────────────────────────────────────
   
   // چک کردن اینکه کاربر ادمین هست یا نه
   const isAdmin = authService.getUser()?.nicename === 'admin';
@@ -462,16 +498,16 @@ const CutifyGlassDemo = () => {
       // Admin: open specific support conversation
       setSelectedConversationId(parseInt(chatId));
       setActiveTab('adminChat');
-      window.history.replaceState({}, '', '/');
+      window.history.replaceState({ tab: 'adminChat' }, '', '/');
     } else if (open === 'support') {
       // User: open support chat
       setActiveTab('support');
-      window.history.replaceState({}, '', '/');
+      window.history.replaceState({ tab: 'support' }, '', '/');
     } else if (open === 'teamChat' && chatId) {
       // Open specific team conversation
       setSelectedTeamConversationId(parseInt(chatId));
       setActiveTab('teamChatView');
-      window.history.replaceState({}, '', '/');
+      window.history.replaceState({ tab: 'teamChatView' }, '', '/');
     }
   }, [isLoggedIn, canManageSupport]);
 

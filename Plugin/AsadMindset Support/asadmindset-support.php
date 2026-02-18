@@ -1960,3 +1960,5 @@ require_once plugin_dir_path(__FILE__) . 'push-notifications.php';
 
 // Include Live Streaming module
 require_once plugin_dir_path(__FILE__) . 'live.php';
+// Include AI Chat module
+require_once plugin_dir_path(__FILE__) . 'ai-chat.php';
