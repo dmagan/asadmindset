@@ -55,20 +55,21 @@ const ToastModal = ({ message, type, duration, onClose }) => {
     // Animate in
     setTimeout(() => setIsVisible(true), 10);
 
-    // Progress bar countdown
-    const interval = setInterval(() => {
-      setProgress(prev => {
-        const newProgress = prev - (100 / (duration / 50));
-        if (newProgress <= 0) {
-          clearInterval(interval);
-          handleClose();
-          return 0;
-        }
-        return newProgress;
-      });
-    }, 50);
-
-    return () => clearInterval(interval);
+    // Auto-close only if duration > 0
+    if (duration > 0) {
+      const interval = setInterval(() => {
+        setProgress(prev => {
+          const newProgress = prev - (100 / (duration / 50));
+          if (newProgress <= 0) {
+            clearInterval(interval);
+            handleClose();
+            return 0;
+          }
+          return newProgress;
+        });
+      }, 50);
+      return () => clearInterval(interval);
+    }
   }, [duration]);
 
   const handleClose = () => {
@@ -228,7 +229,8 @@ const styles = {
     fontSize: '15px',
     lineHeight: '1.6',
     margin: '0 0 24px 0',
-    direction: 'rtl'
+    direction: 'rtl',
+    whiteSpace: 'pre-wrap'
   },
 
   okButton: {

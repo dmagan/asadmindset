@@ -6,7 +6,7 @@ import IOSAddToHome from './IOSAddToHome';
 import VideoUploadCard from './VideoUploadCard.js';
 import './styles/cutify-glass.css';
 import { AuthProvider, useAuth } from './context/AuthContext';
-import { ToastProvider } from './components/Toast';
+import { ToastProvider, useToast } from './components/Toast';
 import LoginCard from './components/LoginCard';
 import ProfileCard from './components/ProfileCard';
 import ProjectsPage from './components/ProjectsPage';
@@ -194,6 +194,7 @@ const CutifyGlassDemo = () => {
   
   // چک کردن اینکه کاربر ادمین هست یا نه
   const isAdmin = authService.getUser()?.nicename === 'admin';
+  const toast = useToast();
 
   // چک دسترسی‌های ترکیبی: ادمین اصلی یا ساب‌ادمین با دسترسی مربوطه
   const canManageSupport = isAdmin || hasPermission('support');
@@ -429,11 +430,41 @@ const CutifyGlassDemo = () => {
       fetchAlphaUnreadCount();
       fetchTeamUnreadCount();
       connectPusher();
-      // ثبت دستگاه — کمی تاخیر تا user object مطمئناً آماده باشه
-      if (user?.id) {
-        pingDevice(user);
-      } else {
-        setTimeout(() => pingDevice(authService.getUser()), 1000);
+      pingDevice(user); // ثبت دستگاه کاربر
+      // چک pending trial notification
+      const trialToken = authService.getToken();
+      if (trialToken) {
+        fetch(`${API_URL}/trial/notification`, {
+          headers: { 'Authorization': `Bearer ${trialToken}` }
+        })
+          .then(r => r.ok ? r.json() : null)
+          .then(data => {
+            if (Array.isArray(data) && data.length > 0) {
+              // هر پلن با تاخیر جداگانه نشون داده می‌شه
+              data.forEach((plan, index) => {
+                const productLabel = {
+                  alpha_channel: 'کانال آلفا',
+                  academy: 'آکادمی',
+                  ai_chat: 'هوش مصنوعی'
+                }[plan.product] || plan.product;
+
+                const durationText = plan.duration_days === 7 ? 'یک هفته'
+                  : plan.duration_days === 30 ? 'یک ماه'
+                  : `${plan.duration_days} روز`;
+
+                setTimeout(() => {
+                  toast.success(
+                    `شما می‌توانید به مدت ${durationText} از ${productLabel} استفاده کنید
+
+📅 از: ${plan.start}
+📅 تا: ${plan.expiry}`,
+                    0
+                  );
+                }, index * 500);
+              });
+            }
+          })
+          .catch(() => {});
       }
       // چک وضعیت لایو
       fetch(`${API_URL}/live/status`)
