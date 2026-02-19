@@ -14,10 +14,11 @@ import {
   Globe,
   Crown,
   Shield,
-  Bell
+  Bell,
+  BarChart2
 } from 'lucide-react';
 
-const ProfileCard = ({ onNavigateToSubscription, onNavigateToSubAdmin, onNavigateToUsers, onNavigateToNotifications }) => {
+const ProfileCard = ({ onNavigateToSubscription, onNavigateToSubAdmin, onNavigateToUsers, onNavigateToNotifications, onNavigateToAnalytics }) => {
   const { t, i18n } = useTranslation();
   const { user, logout, updateProfile, changePassword } = useAuth();
 
@@ -134,6 +135,18 @@ const ProfileCard = ({ onNavigateToSubscription, onNavigateToSubAdmin, onNavigat
                 <Bell size={20} />
               </div>
               <span className="menu-label">ارسال نوتیفیکیشن</span>
+            </div>
+            <ChevronRight size={20} className="menu-arrow" />
+          </button>
+        )}
+
+        {isAdmin && (
+          <button className="profile-menu-item" onClick={onNavigateToAnalytics}>
+            <div className="menu-item-left">
+              <div className="menu-icon" style={{ background: 'linear-gradient(135deg, rgba(16,185,129,0.6), rgba(59,130,246,0.6))' }}>
+                <BarChart2 size={20} />
+              </div>
+              <span className="menu-label">آنالیتیکس</span>
             </div>
             <ChevronRight size={20} className="menu-arrow" />
           </button>

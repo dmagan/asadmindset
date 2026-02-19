@@ -60,6 +60,24 @@ class AsadMindset_Trial {
             ],
         ]);
 
+        // دریافت و پاک کردن pending trial notification (برای کاربر عادی)
+        register_rest_route($ns, '/trial/notification', [
+            [
+                'methods'             => WP_REST_Server::READABLE,
+                'callback'            => [__CLASS__, 'get_pending_notification'],
+                'permission_callback' => '__return_true',
+            ],
+        ]);
+
+        // اجرای دستی پلن‌های تریال برای کاربران قدیمی (ادمین)
+        register_rest_route($ns, '/admin/trial/run-for-existing', [
+            [
+                'methods'             => WP_REST_Server::CREATABLE,
+                'callback'            => [__CLASS__, 'run_for_existing_users'],
+                'permission_callback' => [__CLASS__, 'can_edit'],
+            ],
+        ]);
+
         // تنظیمات کلی تریال (is_enabled)
         register_rest_route($ns, '/admin/trial/settings', [
             [
@@ -234,6 +252,98 @@ class AsadMindset_Trial {
 
     // ── Settings ──
 
+    public static function get_pending_notification(WP_REST_Request $req) {
+        // توکن از HTTP_AUTHORIZATION
+        $auth = isset($_SERVER['HTTP_AUTHORIZATION']) ? $_SERVER['HTTP_AUTHORIZATION'] : '';
+        if (!preg_match('/Bearer\s(\S+)/', $auth, $m)) {
+            return rest_ensure_response(null);
+        }
+        $secret = defined('JWT_AUTH_SECRET_KEY') ? JWT_AUTH_SECRET_KEY : '';
+        if (!$secret) return rest_ensure_response(null);
+        try {
+            $parts = explode('.', $m[1]);
+            if (count($parts) !== 3) return rest_ensure_response(null);
+            $payload = json_decode(base64_decode($parts[1]), true);
+            if (!$payload || empty($payload['data']['user']['id'])) return rest_ensure_response(null);
+            if (!empty($payload['exp']) && $payload['exp'] < time()) return rest_ensure_response(null);
+            $user_id = (int) $payload['data']['user']['id'];
+        } catch (Exception $e) {
+            return rest_ensure_response(null);
+        }
+
+        $notif = get_user_meta($user_id, 'pending_trial_notification', true);
+        if (!$notif) return rest_ensure_response([]);
+
+        // بعد از خوندن، پاکش می‌کنیم
+        delete_user_meta($user_id, 'pending_trial_notification');
+
+        $data = json_decode($notif, true);
+        // اگه آبجکت قدیمی بود (قبل از آپدیت) تبدیل به آرایه کن
+        if (isset($data['plan_name'])) $data = [$data];
+        return rest_ensure_response($data ?: []);
+    }
+
+    /**
+     * اجرای پلن‌های تریال برای کاربران قدیمی (بدون خرید قبلی)
+     */
+    public static function run_for_existing_users(WP_REST_Request $req) {
+        global $wpdb;
+
+        @set_time_limit(120);
+
+        $offset     = (int) ($req->get_param('offset') ?? 0);
+        $batch_size = 20;
+
+        $table = $wpdb->prefix . 'asadmindset_trial_plans';
+        $now   = current_time('Y-m-d');
+
+        $plans = $wpdb->get_results(
+            $wpdb->prepare(
+                "SELECT * FROM $table
+                 WHERE is_active = 1
+                   AND (valid_from  IS NULL OR valid_from  <= %s)
+                   AND (valid_until IS NULL OR valid_until >= %s)",
+                $now, $now
+            )
+        );
+
+        if (empty($plans)) {
+            return rest_ensure_response(['success' => true, 'done' => true, 'message' => 'هیچ پلن فعالی یافت نشد']);
+        }
+
+        $subs_table          = $wpdb->prefix . 'subscriptions';
+        $users_with_purchase = $wpdb->get_col(
+            "SELECT DISTINCT user_id FROM $subs_table WHERE amount > 0 AND status IN ('approved','pending')"
+        );
+
+        $all_users    = $wpdb->get_col("SELECT ID FROM {$wpdb->users} ORDER BY ID ASC");
+        $target_users = array_values(array_diff($all_users, $users_with_purchase ?: []));
+        $total        = count($target_users);
+
+        $batch = array_slice($target_users, $offset, $batch_size);
+
+        $processed = 0;
+        foreach ($batch as $user_id) {
+            foreach ($plans as $plan) {
+                self::give_trial((int) $user_id, $plan);
+            }
+            $processed++;
+        }
+
+        $next_offset = $offset + $batch_size;
+        $done        = $next_offset >= $total;
+
+        return rest_ensure_response([
+            'success'     => true,
+            'done'        => $done,
+            'processed'   => $processed,
+            'offset'      => $offset,
+            'next_offset' => $done ? null : $next_offset,
+            'total'       => $total,
+            'message'     => "{$processed} کاربر از {$total} پردازش شد (offset: {$offset})"
+        ]);
+    }
+
     public static function get_settings() {
         $is_enabled = (bool) get_option('asadmindset_trial_enabled', false);
         return rest_ensure_response(['is_enabled' => $is_enabled]);
@@ -314,7 +424,7 @@ class AsadMindset_Trial {
 
     private static function create_subscription(int $user_id, int $duration_days, string $plan_name, string $product) {
         global $wpdb;
-        $subs_table = $wpdb->prefix . 'asadmindset_subscriptions';
+        $subs_table = $wpdb->prefix . 'subscriptions';
 
         if ($wpdb->get_var("SHOW TABLES LIKE '$subs_table'") !== $subs_table) {
             update_user_meta($user_id, 'asadmindset_trial_expiry', date('Y-m-d H:i:s', strtotime("+{$duration_days} days")));
@@ -326,44 +436,123 @@ class AsadMindset_Trial {
         $had_paid_for_product = $wpdb->get_var($wpdb->prepare(
             "SELECT id FROM $subs_table 
              WHERE user_id=%d 
-               AND is_trial=0 
                AND amount > 0
-               AND plan_type=%s
+               AND status IN ('approved','pending')
              LIMIT 1",
-            $user_id,
-            $product
+            $user_id
         ));
         if ($had_paid_for_product) return;
 
         // همین پلن مشخص قبلاً داده شده؟
         $already_trial = $wpdb->get_var($wpdb->prepare(
             "SELECT id FROM $subs_table 
-             WHERE user_id=%d AND is_trial=1 AND admin_note=%s LIMIT 1",
+             WHERE user_id=%d AND admin_note=%s LIMIT 1",
             $user_id,
             'تریال خودکار: ' . $plan_name
         ));
         if ($already_trial) return;
 
-        $now   = current_time('mysql');
+        $now    = current_time('mysql');
+        $expiry = date('Y-m-d H:i:s', strtotime("+{$duration_days} days"));
+
         $wpdb->insert(
             $subs_table,
             [
-                'user_id'       => $user_id,
-                'plan_type'     => 'trial',
-                'duration_days' => $duration_days,
-                'amount'        => 0,
-                'network'       => 'trial',
-                'tx_hash'       => 'TRIAL-' . $user_id . '-' . time(),
-                'status'        => 'active',
-                'start_date'    => $now,
-                'expiry_date'   => date('Y-m-d H:i:s', strtotime("+{$duration_days} days")),
-                'is_manual'     => 1,
-                'is_trial'      => 1,
-                'admin_note'    => 'تریال خودکار: ' . $plan_name,
-                'created_at'    => $now,
+                'user_id'    => $user_id,
+                'plan_type'  => 'trial',
+                'amount'     => 0,
+                'network'    => 'trial',
+                'tx_hash'    => 'TRIAL-' . $user_id . '-' . time(),
+                'status'     => 'approved',
+                'started_at' => $now,
+                'expires_at' => $expiry,
+                'approved_at'=> $now,
+                'is_manual'  => 1,
+                'admin_note' => 'تریال خودکار: ' . $plan_name,
+                'created_at' => $now,
             ],
-            ['%d','%s','%d','%f','%s','%s','%s','%s','%s','%d','%d','%s','%s']
+            ['%d','%s','%f','%s','%s','%s','%s','%s','%s','%d','%s','%s']
         );
+
+        // ارسال پیام فعال‌سازی در چت پشتیبانی
+        self::send_trial_chat_message($user_id, $plan_name, $product, $duration_days, $now, $expiry);
+
+        // ذخیره notification برای نمایش Toast در frontend (آرایه برای چند پلن)
+        $existing = get_user_meta($user_id, 'pending_trial_notification', true);
+        $notifs = $existing ? json_decode($existing, true) : [];
+        if (!is_array($notifs)) $notifs = [];
+        $notifs[] = [
+            'plan_name'    => $plan_name,
+            'duration_days'=> $duration_days,
+            'product'      => $product,
+            'start'        => date('Y/m/d', strtotime($now)),
+            'expiry'       => date('Y/m/d', strtotime($expiry)),
+        ];
+        update_user_meta($user_id, 'pending_trial_notification', json_encode($notifs, JSON_UNESCAPED_UNICODE));
+    }
+
+    /**
+     * ارسال پیام فعال‌سازی تریال در Support Chat
+     */
+    private static function send_trial_chat_message(int $user_id, string $plan_name, string $product, int $duration_days, string $start, string $expiry) {
+        global $wpdb;
+        $table_conv = $wpdb->prefix . 'support_conversations';
+        $table_msg  = $wpdb->prefix . 'support_messages';
+
+        if ($wpdb->get_var("SHOW TABLES LIKE '$table_conv'") !== $table_conv) return;
+
+        // گرفتن یا ساخت conversation
+        $conv = $wpdb->get_row($wpdb->prepare(
+            "SELECT id FROM $table_conv WHERE user_id = %d ORDER BY id DESC LIMIT 1",
+            $user_id
+        ));
+
+        if (!$conv) {
+            $wpdb->insert($table_conv, ['user_id' => $user_id, 'status' => 'open']);
+            $conv_id = $wpdb->insert_id;
+        } else {
+            $conv_id = $conv->id;
+        }
+
+        // فرمت تاریخ میلادی
+        $start_fmt  = date('Y/m/d', strtotime($start));
+        $expiry_fmt = date('Y/m/d', strtotime($expiry));
+
+        $product_label = [
+            'alpha_channel' => 'کانال آلفا',
+            'academy'       => 'آکادمی',
+            'ai_chat'       => 'هوش مصنوعی',
+        ][$product] ?? $product;
+
+        $duration_text = $duration_days === 7 ? 'یک هفته'
+            : ($duration_days === 30 ? 'یک ماه'
+            : "{$duration_days} روز");
+
+        $text = "شما می‌توانید به مدت {$duration_text} از {$product_label} استفاده کنید\n\n"
+              . "📅 از: {$start_fmt}\n"
+              . "📅 تا: {$expiry_fmt}";
+
+        $wpdb->insert($table_msg, [
+            'conversation_id' => $conv_id,
+            'sender_type'     => 'admin',
+            'sender_id'       => 0,
+            'message_type'    => 'text',
+            'content'         => $text,
+            'status'          => 'sent',
+            'created_at'      => current_time('mysql'),
+        ]);
+
+        // Pusher notification
+        if (class_exists('AsadMindset_Support')) {
+            $instance = AsadMindset_Support::get_instance();
+            $instance->trigger_pusher_event('conversation-' . $conv_id, 'new-message', [
+                'id'        => $wpdb->insert_id,
+                'type'      => 'text',
+                'content'   => $text,
+                'sender'    => 'admin',
+                'createdAt' => current_time('mysql'),
+            ]);
+        }
     }
 }
 

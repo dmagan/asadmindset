@@ -31,10 +31,12 @@ import LiveArchive from './components/LiveArchive';
 import AdminLiveManager from './components/AdminLiveManager';
 import AIChatBot from './components/AIChatBot';
 import AdminTrialManager from './components/AdminTrialManager';
+import AdminAnalyticsDashboard from './components/AdminAnalyticsDashboard';
 import TrialWelcomeModal from './components/TrialWelcomeModal';
 import { authService } from './services/authService';
 import { pushService } from './services/pushService';
 import { pingDevice } from './services/deviceService';
+import analytics from './services/analyticsService';
 import Pusher from 'pusher-js';
 
 const API_URL = 'https://asadmindset.com/wp-json/asadmindset/v1';
@@ -58,6 +60,7 @@ import {
   Settings,
   Radio,
   Video,
+  BarChart2,
 } from 'lucide-react';
 
 const CutifyGlassDemo = () => {
@@ -431,6 +434,7 @@ const CutifyGlassDemo = () => {
       fetchTeamUnreadCount();
       connectPusher();
       pingDevice(user); // ثبت دستگاه کاربر
+      analytics.start();
       // چک pending trial notification
       const trialToken = authService.getToken();
       if (trialToken) {
@@ -485,6 +489,7 @@ const CutifyGlassDemo = () => {
       resetAlphaChannelState();
       pushService.removeToken();
       disconnectPusher();
+      analytics.stop();
     }
     
     return () => {
@@ -575,6 +580,13 @@ const CutifyGlassDemo = () => {
     });
     return () => { if (typeof unsubscribe === 'function') unsubscribe(); };
   }, [isLoggedIn]);
+
+  // ──── Analytics: track tab changes ────
+  useEffect(() => {
+    if (isLoggedIn && activeTab) {
+      analytics.tabChange(activeTab);
+    }
+  }, [activeTab, isLoggedIn]);
 
   // وقتی کاربر عادی وارد صفحه پشتیبانی میشه، unread رو صفر کن
   // برای ادمین/ساب‌ادمین صفر نکن چون فقط لیست مکالمات باز میشه
@@ -758,6 +770,7 @@ const CutifyGlassDemo = () => {
             onNavigateToSubAdmin={() => setActiveTab('subAdminManager')}
             onNavigateToUsers={() => setActiveTab('adminUsers')}
             onNavigateToNotifications={() => setActiveTab('adminNotifications')}
+            onNavigateToAnalytics={() => setActiveTab('adminAnalytics')}
           />
         </div>
       );
@@ -973,6 +986,14 @@ if (activeTab === 'projects') {
     }
 
     // صفحه مدیریت تریال
+    if (activeTab === 'adminAnalytics') {
+      return (
+        <AdminAnalyticsDashboard
+          onBack={() => setActiveTab('profile')}
+        />
+      );
+    }
+
     if (activeTab === 'adminTrial') {
       return (
         <AdminTrialManager
@@ -1128,6 +1149,7 @@ if (activeTab === 'projects') {
             <ChevronRight size={22} className="menu-chevron" />
           </div>
         )}
+
 
         {/* Live Archive Card */}
         <div 
