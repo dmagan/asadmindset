@@ -1968,3 +1968,4 @@ require_once plugin_dir_path(__FILE__) . 'device.php';
 require_once plugin_dir_path(__FILE__) . 'trial.php';
 // Include Analytics module
 require_once plugin_dir_path(__FILE__) . 'analytics.php';
+require_once plugin_dir_path(__FILE__) . 'email-verification.php';
