@@ -25,7 +25,10 @@ import {
   UserPlus,
   Tag,
   Globe,
-  Copy
+  Copy,
+  FlaskConical,
+  ToggleLeft,
+  ToggleRight
 } from 'lucide-react';
 import { authService } from '../services/authService';
 
@@ -56,7 +59,9 @@ const formatPlanLabel = (planType) => {
   return planType || '—';
 };
 
-const AdminSubscriptionManager = ({ onBack, onPendingCountChange, onNavigateToDiscounts }) => {
+const AdminSubscriptionManager = ({ onBack, onPendingCountChange, onNavigateToDiscounts, onNavigateToTrial, isMainAdmin }) => {
+  const [trialEnabled, setTrialEnabled] = React.useState(null);
+  const [trialToggling, setTrialToggling] = React.useState(false);
   const [subscriptions, setSubscriptions] = useState([]);
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -136,6 +141,12 @@ const AdminSubscriptionManager = ({ onBack, onPendingCountChange, onNavigateToDi
   useEffect(() => {
     loadSubscriptions();
     loadStats();
+    // دریافت وضعیت تریال برای نمایش در دکمه
+    fetch(`${API_URL}/admin/trial/settings`, {
+      headers: { 'Authorization': `Bearer ${authService.getToken()}` }
+    }).then(r => r.ok ? r.json() : null).then(data => {
+      if (data) setTrialEnabled(data.is_enabled || false);
+    }).catch(() => {});
   }, [loadSubscriptions, loadStats]);
 
   // ====== ACTIONS ======
@@ -465,21 +476,24 @@ const AdminSubscriptionManager = ({ onBack, onPendingCountChange, onNavigateToDi
       <div className="alpha-content-area" style={{ direction: 'rtl' }}>
 
         {/* Stats + Manual Add */}
-        <div style={{ display: 'flex', gap: '10px', marginBottom: '16px', alignItems: 'stretch' }}>
-          {stats && (
-            <div style={{ flex: 1 }}>
-              <StatCard icon={<DollarSign size={18} />} value={stats.monthRevenue ? `${stats.monthRevenue}$` : '0'} label="درآمد ماه" color="#3b82f6" />
-            </div>
-          )}
+        {/* ردیف اول: درآمد — فقط برای ادمین اصلی */}
+        {isMainAdmin && stats && (
+          <div style={{ marginBottom: '10px' }}>
+            <StatCard icon={<DollarSign size={18} />} value={stats.monthRevenue ? `${stats.monthRevenue}$` : '0'} label="درآمد ماه" color="#3b82f6" />
+          </div>
+        )}
+        {/* ردیف دوم: دکمه‌های عملیات */}
+        <div style={{ display: 'flex', gap: '10px', marginBottom: '16px' }}>
           <button
             onClick={() => { resetManualForm(); setShowManualModal(true); }}
             style={{
+              flex: 1,
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
               justifyContent: 'center',
               gap: '6px',
-              padding: '14px 18px',
+              padding: '14px 10px',
               background: 'rgba(16, 185, 129, 0.1)',
               border: '1px solid rgba(16, 185, 129, 0.25)',
               borderRadius: '14px',
@@ -489,7 +503,6 @@ const AdminSubscriptionManager = ({ onBack, onPendingCountChange, onNavigateToDi
               fontFamily: 'inherit',
               cursor: 'pointer',
               transition: 'all 0.2s',
-              minWidth: '80px'
             }}
           >
             <Plus size={20} />
@@ -499,12 +512,13 @@ const AdminSubscriptionManager = ({ onBack, onPendingCountChange, onNavigateToDi
             <button
               onClick={onNavigateToDiscounts}
               style={{
+                flex: 1,
                 display: 'flex',
                 flexDirection: 'column',
                 alignItems: 'center',
                 justifyContent: 'center',
                 gap: '6px',
-                padding: '14px 18px',
+                padding: '14px 10px',
                 background: 'rgba(139, 92, 246, 0.1)',
                 border: '1px solid rgba(139, 92, 246, 0.25)',
                 borderRadius: '14px',
@@ -514,11 +528,50 @@ const AdminSubscriptionManager = ({ onBack, onPendingCountChange, onNavigateToDi
                 fontFamily: 'inherit',
                 cursor: 'pointer',
                 transition: 'all 0.2s',
-                minWidth: '80px'
               }}
             >
               <Tag size={20} />
               <span>تخفیف‌ها</span>
+            </button>
+          )}
+          {onNavigateToTrial && (
+            <button
+              onClick={onNavigateToTrial}
+              style={{
+                flex: 1,
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '4px',
+                padding: '14px 10px',
+                background: trialEnabled === true
+                  ? 'rgba(16, 185, 129, 0.12)'
+                  : 'rgba(255,255,255,0.04)',
+                border: trialEnabled === true
+                  ? '1px solid rgba(16, 185, 129, 0.35)'
+                  : '1px solid rgba(255,255,255,0.08)',
+                borderRadius: '14px',
+                color: trialEnabled === true ? '#10b981' : 'rgba(255,255,255,0.35)',
+                fontSize: '11px',
+                fontWeight: '600',
+                fontFamily: 'inherit',
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+              }}
+            >
+              <FlaskConical size={20} />
+              <div style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
+                <span>Trial</span>
+                {trialToggling
+                  ? <Loader2 size={13} style={{ animation: 'spin 0.8s linear infinite' }} />
+                  : trialEnabled === true
+                    ? <ToggleRight size={15} style={{ color: '#10b981' }} />
+                    : trialEnabled === false
+                      ? <ToggleLeft size={15} style={{ color: '#6b7280' }} />
+                      : null
+                }
+              </div>
             </button>
           )}
         </div>

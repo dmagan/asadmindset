@@ -28,7 +28,8 @@ import {
   AlertCircle,
   RefreshCw,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  FlaskConical
 } from 'lucide-react';
 import { authService } from '../services/authService';
 
@@ -40,6 +41,7 @@ const PERMISSION_META = {
   subscriptions: { label: 'اشتراک‌ها', icon: CreditCard, color: '#10b981', desc: 'تایید و رد درخواست‌های اشتراک' },
   discounts:     { label: 'تخفیف‌ها', icon: Tag, color: '#f59e0b', desc: 'ساخت و مدیریت کدهای تخفیف' },
   manual_order:  { label: 'ثبت سفارش', icon: FileText, color: '#ec4899', desc: 'ثبت سفارش دستی برای کاربران' },
+  trial_edit:    { label: 'ویرایش Trial', icon: FlaskConical, color: '#06b6d4', desc: 'تنظیم و ویرایش تریال کاربران جدید' },
   view_only:     { label: 'فقط مشاهده', icon: Eye, color: '#6b7280', desc: 'مشاهده بدون امکان تغییر' },
 };
 

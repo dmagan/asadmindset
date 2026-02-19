@@ -1944,15 +1944,15 @@ class AsadMindset_Support {
     }
 }
 
-// Initialize plugin
-AsadMindset_Support::get_instance();
-
 // Include Sub-Admin module (باید قبل از بقیه لود بشه)
 require_once plugin_dir_path(__FILE__) . 'sub-admin.php';
 
 // Include Alpha Channel module
 require_once plugin_dir_path(__FILE__) . 'alpha-channel.php';
 require_once plugin_dir_path(__FILE__) . 'subscription.php';
+
+// Include Trial module
+require_once plugin_dir_path(__FILE__) . 'trial.php';
 
 // Include Team Chat module
 require_once plugin_dir_path(__FILE__) . 'team-chat.php';
@@ -1962,3 +1962,8 @@ require_once plugin_dir_path(__FILE__) . 'push-notifications.php';
 require_once plugin_dir_path(__FILE__) . 'live.php';
 // Include AI Chat module
 require_once plugin_dir_path(__FILE__) . 'ai-chat.php';
+// Include Device Tracking module
+require_once plugin_dir_path(__FILE__) . 'device.php';
+
+// Initialize plugin
+AsadMindset_Support::get_instance();

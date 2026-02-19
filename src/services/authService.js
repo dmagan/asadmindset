@@ -61,6 +61,7 @@ export const authService = {
     const userEmail = data.data?.email || data.user_email;
     const userName = data.data?.displayName || data.user_display_name;
     const userNicename = data.data?.nicename || data.user_nicename;
+    const userId = data.data?.id || data.user_id || data.data?.user_id;
 
     if (!token) {
       throw new Error('No token received');
@@ -68,6 +69,7 @@ export const authService = {
 
     localStorage.setItem('token', token);
     localStorage.setItem('user', JSON.stringify({
+      id: userId,
       email: userEmail,
       name: userName,
       nicename: userNicename,
@@ -101,6 +103,7 @@ export const authService = {
     const userEmail = data.data?.email || data.user_email;
     const userName = data.data?.displayName || data.user_display_name;
     const userNicename = data.data?.nicename || data.user_nicename;
+    const userId = data.data?.id || data.user_id || data.data?.user_id;
 
     if (!token) {
       throw new Error('No token received');
@@ -108,6 +111,7 @@ export const authService = {
 
     localStorage.setItem('token', token);
     localStorage.setItem('user', JSON.stringify({
+      id: userId,
       email: userEmail,
       name: userName,
       nicename: userNicename,

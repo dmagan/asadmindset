@@ -3,7 +3,7 @@
 // آخرش 'i' بذار = آپدیت اجباری بدون سوال
 // مثال: '5' = بنر بروزرسانی | '5i' = آپدیت فوری
 // ==============================
-const APP_VERSION = '4';
+const APP_VERSION = '5';
 const CACHE_NAME = `asadmindset-shell-v${APP_VERSION}`;
 const FORCE_UPDATE = APP_VERSION.endsWith('i');
 

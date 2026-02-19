@@ -30,8 +30,11 @@ import LivePage from './components/LivePage';
 import LiveArchive from './components/LiveArchive';
 import AdminLiveManager from './components/AdminLiveManager';
 import AIChatBot from './components/AIChatBot';
+import AdminTrialManager from './components/AdminTrialManager';
+import TrialWelcomeModal from './components/TrialWelcomeModal';
 import { authService } from './services/authService';
 import { pushService } from './services/pushService';
+import { pingDevice } from './services/deviceService';
 import Pusher from 'pusher-js';
 
 const API_URL = 'https://asadmindset.com/wp-json/asadmindset/v1';
@@ -188,42 +191,6 @@ const CutifyGlassDemo = () => {
   useEffect(() => {
     activeTabRef.current = activeTab;
   }, [activeTab]);
-
-  // ───── Android Back Button Support ─────
-  // هر بار که activeTab عوض می‌شه (و home نیست)، یه history entry اضافه کن
-  // iOS: دکمه Back فیزیکی ندارد → این کد روی iOS تأثیری نمی‌گذارد
-  const prevTabRef = useRef('home');
-  useEffect(() => {
-    const isAndroid = /Android/i.test(navigator.userAgent);
-    if (!isAndroid) return; // فقط برای Android فعال باشه
-
-    if (activeTab !== 'home') {
-      // pushState جدید فقط اگر tab واقعاً عوض شده
-      if (prevTabRef.current !== activeTab) {
-        window.history.pushState({ tab: activeTab }, '');
-      }
-    }
-    prevTabRef.current = activeTab;
-  }, [activeTab]);
-
-  // گوش دادن به Back button اندروید
-  useEffect(() => {
-    const isAndroid = /Android/i.test(navigator.userAgent);
-    if (!isAndroid) return;
-
-    const handlePopState = (e) => {
-      if (e.state && e.state.tab) {
-        setActiveTab(e.state.tab);
-      } else {
-        // به home برگرد، مرورگر خودش از اپ خارج می‌شه اگه دوباره Back بزنه
-        setActiveTab('home');
-      }
-    };
-
-    window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
-  }, []);
-  // ───────────────────────────────────────
   
   // چک کردن اینکه کاربر ادمین هست یا نه
   const isAdmin = authService.getUser()?.nicename === 'admin';
@@ -234,6 +201,7 @@ const CutifyGlassDemo = () => {
   const canManageSubscriptions = isAdmin || hasPermission('subscriptions');
   const canManageDiscounts = isAdmin || hasPermission('discounts');
   const canManualOrder = isAdmin || hasPermission('manual_order');
+  const canEditTrial = isAdmin || hasPermission('trial_edit');
 
   // دریافت تعداد پیام‌های خوانده نشده
   const fetchUnreadCount = async () => {
@@ -461,6 +429,12 @@ const CutifyGlassDemo = () => {
       fetchAlphaUnreadCount();
       fetchTeamUnreadCount();
       connectPusher();
+      // ثبت دستگاه — کمی تاخیر تا user object مطمئناً آماده باشه
+      if (user?.id) {
+        pingDevice(user);
+      } else {
+        setTimeout(() => pingDevice(authService.getUser()), 1000);
+      }
       // چک وضعیت لایو
       fetch(`${API_URL}/live/status`)
         .then(r => r.json())
@@ -485,7 +459,7 @@ const CutifyGlassDemo = () => {
     return () => {
       disconnectPusher();
     };
-  }, [isLoggedIn, canManageSupport, canManageSubscriptions]);
+  }, [isLoggedIn, user, canManageSupport, canManageSubscriptions]);
 
   // Deep link: handle push notification click (URL params)
   useEffect(() => {
@@ -498,16 +472,16 @@ const CutifyGlassDemo = () => {
       // Admin: open specific support conversation
       setSelectedConversationId(parseInt(chatId));
       setActiveTab('adminChat');
-      window.history.replaceState({ tab: 'adminChat' }, '', '/');
+      window.history.replaceState({}, '', '/');
     } else if (open === 'support') {
       // User: open support chat
       setActiveTab('support');
-      window.history.replaceState({ tab: 'support' }, '', '/');
+      window.history.replaceState({}, '', '/');
     } else if (open === 'teamChat' && chatId) {
       // Open specific team conversation
       setSelectedTeamConversationId(parseInt(chatId));
       setActiveTab('teamChatView');
-      window.history.replaceState({ tab: 'teamChatView' }, '', '/');
+      window.history.replaceState({}, '', '/');
     }
   }, [isLoggedIn, canManageSupport]);
 
@@ -899,6 +873,8 @@ if (activeTab === 'projects') {
             onBack={() => setActiveTab('home')} 
             onPendingCountChange={(count) => setPendingSubCount(count)}
             onNavigateToDiscounts={() => setActiveTab('adminDiscounts')}
+            onNavigateToTrial={() => setActiveTab('adminTrial')}
+            isMainAdmin={isAdmin}
           />
         );
       }
@@ -961,6 +937,16 @@ if (activeTab === 'projects') {
         <AIChatBot
           onBack={() => setActiveTab('home')}
           userName={user?.display_name || user?.nicename || ''}
+        />
+      );
+    }
+
+    // صفحه مدیریت تریال
+    if (activeTab === 'adminTrial') {
+      return (
+        <AdminTrialManager
+          onBack={() => setActiveTab('shop')}
+          isMainAdmin={canEditTrial}
         />
       );
     }
@@ -1273,6 +1259,9 @@ if (activeTab === 'projects') {
           </div>
         )}
         {renderContent()}
+
+        {/* Trial welcome popup — فقط یه بار بعد از دریافت تریال */}
+        {isLoggedIn && <TrialWelcomeModal />}
 
         {/* Push notification permission prompt */}
         {showPushPrompt && (

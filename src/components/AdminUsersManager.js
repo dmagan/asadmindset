@@ -25,11 +25,13 @@ import {
   Check as CheckIcon
 } from 'lucide-react';
 import { authService } from '../services/authService';
+import { DEVICE_INFO, BROWSER_INFO } from '../services/deviceService';
 
 const API_URL = 'https://asadmindset.com/wp-json/asadmindset/v1';
 
 const AdminUsersManager = ({ onBack }) => {
   const [activeTab, setActiveTab] = useState('list'); // list | stats
+  const [userDevices, setUserDevices] = useState({}); // { userId: [{deviceType, useCount, lastSeen}] }
   const [users, setUsers] = useState([]);
   const [allUsers, setAllUsers] = useState([]); // all users for stats calculations
   const [loading, setLoading] = useState(true);
@@ -666,7 +668,21 @@ const AdminUsersManager = ({ onBack }) => {
             const subInfo = hasSub ? getSubStatusInfo(u.subscription.status) : null;
 
             return (
-              <div key={u.id} onClick={() => setExpandedUser(isExpanded ? null : u.id)}
+              <div key={u.id} onClick={async () => {
+                const newId = isExpanded ? null : u.id;
+                setExpandedUser(newId);
+                if (newId && !userDevices[newId]) {
+                  try {
+                    const res = await fetch(`${API_URL}/admin/users/${newId}/devices`, {
+                      headers: { Authorization: `Bearer ${authService.getToken()}` }
+                    });
+                    const devices = res.ok ? await res.json() : [];
+                    setUserDevices(prev => ({ ...prev, [newId]: Array.isArray(devices) ? devices : [] }));
+                  } catch(e) {
+                    setUserDevices(prev => ({ ...prev, [newId]: [] }));
+                  }
+                }
+              }}
                 style={{
                   padding: '14px',
                   background: isExpanded ? 'rgba(59, 130, 246, 0.05)' : 'rgba(255, 255, 255, 0.04)',
@@ -772,6 +788,87 @@ const AdminUsersManager = ({ onBack }) => {
                         <NotifTag label="تیم" active={u.notificationPrefs?.team_chat !== false} />
                       </div>
                     </div>
+
+                    {/* دستگاه‌های کاربر */}
+                    {(() => {
+                      const devices = userDevices[u.id];
+                      if (!devices) return (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', paddingTop: '10px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                          <Loader2 size={13} style={{ color: 'rgba(255,255,255,0.3)', animation: 'spin 1s linear infinite' }} />
+                          <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.3)' }}>در حال دریافت...</span>
+                        </div>
+                      );
+                      if (!devices.length) return (
+                        <div style={{ paddingTop: '10px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <span style={{ fontSize: '13px' }}>📱</span>
+                            <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.25)' }}>هنوز اطلاعات دستگاهی ثبت نشده</span>
+                          </div>
+                        </div>
+                      );
+
+                      const lastSeen = devices.reduce((a, b) => a.lastSeen > b.lastSeen ? a : b);
+
+                      return (
+                        <div style={{ paddingTop: '10px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <span style={{ fontSize: '13px' }}>📱</span>
+                              <span style={{ fontSize: '12px', color: 'rgba(255,255,255,0.4)' }}>دستگاه‌ها</span>
+                            </div>
+                            <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.25)', direction: 'ltr' }}>
+                              آخرین آنلاین: {formatDate(lastSeen.lastSeen)}
+                            </span>
+                          </div>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                            {devices.map(d => {
+                              const devInfo = DEVICE_INFO[d.deviceType] || DEVICE_INFO.unknown;
+                              const brInfo  = BROWSER_INFO[d.browser]   || BROWSER_INFO.unknown;
+                              return (
+                                <div key={`${d.deviceType}-${d.browser}`} style={{
+                                  display: 'flex', alignItems: 'center', gap: '8px',
+                                  padding: '7px 10px', borderRadius: '10px',
+                                  background: 'rgba(255,255,255,0.03)',
+                                  border: '1px solid rgba(255,255,255,0.07)',
+                                }}>
+                                  {/* Device */}
+                                  <span style={{ fontSize: '15px' }}>{devInfo.icon}</span>
+                                  <span style={{ fontSize: '12px', fontWeight: '600', color: devInfo.color, minWidth: '52px' }}>
+                                    {devInfo.label}
+                                  </span>
+                                  {/* Divider */}
+                                  <span style={{ color: 'rgba(255,255,255,0.1)', fontSize: '14px' }}>|</span>
+                                  {/* Browser */}
+                                  <span style={{ fontSize: '13px' }}>{brInfo.icon}</span>
+                                  <span style={{ fontSize: '12px', color: brInfo.color, flex: 1 }}>
+                                    {d.browser}{d.browserVer ? ` ${d.browserVer}` : ''}
+                                  </span>
+                                  {/* PWA badge for iOS */}
+                                  {d.deviceType === 'ios' && (
+                                    <span style={{
+                                      fontSize: '10px', fontWeight: '600',
+                                      padding: '2px 6px', borderRadius: '5px',
+                                      background: d.pwaInstalled ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.1)',
+                                      color: d.pwaInstalled ? '#10b981' : '#ef4444',
+                                      border: `1px solid ${d.pwaInstalled ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.2)'}`,
+                                      whiteSpace: 'nowrap',
+                                    }}>
+                                      {d.pwaInstalled ? '📲 A2HS' : '🌐 Browser'}
+                                    </span>
+                                  )}
+                                  {/* Count */}
+                                  <span style={{
+                                    fontSize: '10px', color: 'rgba(255,255,255,0.35)',
+                                    background: 'rgba(255,255,255,0.06)',
+                                    padding: '2px 6px', borderRadius: '5px',
+                                  }}>×{d.useCount}</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </div>
                 )}
               </div>

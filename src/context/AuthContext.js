@@ -89,6 +89,7 @@ export const AuthProvider = ({ children }) => {
   const login = async (username, password) => {
     const data = await authService.login(username, password);
     setUser({
+      id: data.data?.id || data.user_id || data.data?.user_id,
       email: data.data?.email || data.user_email,
       name: data.data?.displayName || data.user_display_name,
       nicename: data.data?.nicename || data.user_nicename,
@@ -101,6 +102,7 @@ export const AuthProvider = ({ children }) => {
   const loginWithGoogle = async (credential) => {
     const data = await authService.googleLogin(credential);
     setUser({
+      id: data.data?.id || data.user_id || data.data?.user_id,
       email: data.data?.email || data.user_email,
       name: data.data?.displayName || data.user_display_name,
       nicename: data.data?.nicename || data.user_nicename,

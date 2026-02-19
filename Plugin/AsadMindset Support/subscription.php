@@ -160,6 +160,7 @@ class AsadMindset_Subscription {
             'winback_1d_sent' => "tinyint(1) DEFAULT 0 AFTER reminder_1d_sent",
             'winback_3d_sent' => "tinyint(1) DEFAULT 0 AFTER winback_1d_sent",
             'reminder_clicked' => "tinyint(1) DEFAULT 0 AFTER winback_3d_sent",
+            'is_trial'         => "tinyint(1) DEFAULT 0 AFTER is_manual",
         );
         foreach ($cols as $name => $def) {
             $c = $wpdb->get_results("SHOW COLUMNS FROM $table LIKE '$name'");
@@ -258,13 +259,28 @@ class AsadMindset_Subscription {
         $active=$this->get_active_sub($uid);
         $pending=$wpdb->get_row($wpdb->prepare("SELECT * FROM $t WHERE user_id=%d AND status='pending' ORDER BY id DESC LIMIT 1",$uid));
         $rejected=$wpdb->get_row($wpdb->prepare("SELECT * FROM $t WHERE user_id=%d AND status='rejected' ORDER BY id DESC LIMIT 1",$uid));
-        $res=array('hasActiveSubscription'=>$active!==null,'hasPendingRequest'=>$pending!==null,'activeSubscription'=>null,'pendingRequest'=>null,'lastRejected'=>null);
+        $res=array('hasActiveSubscription'=>$active!==null,'hasPendingRequest'=>$pending!==null,'activeSubscription'=>null,'pendingRequest'=>null,'lastRejected'=>null,'activeTrials'=>array());
         if($active){
             $dr=max(0,floor((strtotime($active->expires_at)-time())/86400));
-            $res['activeSubscription']=array('id'=>(int)$active->id,'subscriptionNumber'=>$active->subscription_number,'planType'=>$active->plan_type,'startedAt'=>$active->started_at,'expiresAt'=>$active->expires_at,'daysRemaining'=>$dr,'isRenewal'=>(bool)intval($active->is_renewal??0),'showRenewalButton'=>$dr<=7);
+            $res['activeSubscription']=array('id'=>(int)$active->id,'subscriptionNumber'=>$active->subscription_number,'planType'=>$active->plan_type,'startedAt'=>$active->started_at,'expiresAt'=>$active->expires_at,'daysRemaining'=>$dr,'isRenewal'=>(bool)intval($active->is_renewal??0),'showRenewalButton'=>$dr<=7,'isTrial'=>(bool)intval($active->is_trial??0));
         }
         if($pending) $res['pendingRequest']=array('id'=>(int)$pending->id,'planType'=>$pending->plan_type,'amount'=>floatval($pending->amount),'createdAt'=>$pending->created_at);
         if($rejected&&!$active&&!$pending) $res['lastRejected']=array('id'=>(int)$rejected->id,'adminNote'=>$rejected->admin_note,'rejectedAt'=>$rejected->updated_at);
+        // تریال‌های فعال برای نمایش welcome popup
+        $trials=$wpdb->get_results($wpdb->prepare(
+            "SELECT * FROM $t WHERE user_id=%d AND is_trial=1 AND status='active' AND expires_at > NOW() ORDER BY id DESC",
+            $uid
+        ));
+        foreach($trials as $tr){
+            $dr=max(0,floor((strtotime($tr->expires_at)-time())/86400));
+            $res['activeTrials'][]=array(
+                'id'=>(int)$tr->id,
+                'planType'=>$tr->plan_type,
+                'planName'=>$tr->admin_note?:('تریال '.$tr->plan_type),
+                'expiresAt'=>$tr->expires_at,
+                'daysRemaining'=>$dr,
+            );
+        }
         return rest_ensure_response($res);
     }
     
