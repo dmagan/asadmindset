@@ -304,7 +304,28 @@ class AsadMindset_TeamChat {
             'permission_callback' => [$this, 'check_team_auth'],
         ]);
 
+        // Save user language preference
+        register_rest_route($ns, '/team/set-lang', [
+            'methods'  => 'POST',
+            'callback' => [$this, 'set_user_lang'],
+            'permission_callback' => [$this, 'check_team_auth'],
+        ]);
+
         // Save translation for a message (lazy cache)
+
+        // Speech-to-Text via OpenAI Whisper
+        register_rest_route($ns, '/voice/stt', [
+            'methods'  => 'POST',
+            'callback' => [$this, 'speech_to_text'],
+            'permission_callback' => [$this, 'check_team_auth'],
+        ]);
+
+        // Text-to-Speech via OpenAI TTS
+        register_rest_route($ns, '/voice/tts', [
+            'methods'  => 'POST',
+            'callback' => [$this, 'text_to_speech'],
+            'permission_callback' => [$this, 'check_team_auth'],
+        ]);
         register_rest_route($ns, '/team/messages/(?P<id>\d+)/translation', [
             'methods'  => 'POST',
             'callback' => [$this, 'save_translation'],
@@ -521,6 +542,7 @@ class AsadMindset_TeamChat {
                 'email'       => $u ? $u->user_email : '',
                 'role'        => $mem->role,
                 'lastReadAt'  => $mem->last_read_at,
+                'lang'        => get_user_meta((int) $mem->user_id, 'teamchat_lang', true) ?: 'fa',
             ];
         }
         
@@ -1162,6 +1184,152 @@ class AsadMindset_TeamChat {
             'success' => true,
             'translated' => trim($translated),
         ], 200);
+    }
+
+    /**
+     * POST /team/set-lang — save user language preference
+     * Body: { lang: "fa"|"de"|"en"|"fr"|"es" }
+     */
+    public function set_user_lang($r) {
+        $uid = $this->get_user_id_from_request($r);
+        $params = $r->get_json_params();
+        $lang = sanitize_text_field($params['lang'] ?? 'fa');
+        $allowed = ['fa', 'de', 'en', 'fr', 'es'];
+        if (!in_array($lang, $allowed)) {
+            return new WP_REST_Response(['error' => 'Invalid lang'], 400);
+        }
+        update_user_meta($uid, 'teamchat_lang', $lang);
+        return new WP_REST_Response(['success' => true, 'lang' => $lang], 200);
+    }
+
+    /**
+     * POST /voice/stt
+     * Converts audio blob → text using OpenAI Whisper
+     * Expects multipart: file (audio), sourceLang (fa/de/en/...)
+     */
+    public function speech_to_text($r) {
+        $api_key = get_option('asadmindset_chatgpt_api_key', '');
+        if (empty($api_key)) {
+            return new WP_REST_Response(['error' => 'API key not configured'], 500);
+        }
+
+        $files = $r->get_file_params();
+        if (empty($files['file'])) {
+            return new WP_REST_Response(['error' => 'No audio file provided'], 400);
+        }
+
+        $file      = $files['file'];
+        $source_lang = sanitize_text_field($r->get_param('sourceLang') ?? 'fa');
+
+        $lang_map = [
+            'fa' => 'fa', 'de' => 'de', 'en' => 'en',
+            'fr' => 'fr', 'es' => 'es',
+        ];
+        $whisper_lang = $lang_map[$source_lang] ?? 'fa';
+
+        // Build multipart request via cURL
+        $tmp_path = $file['tmp_name'];
+        $orig_name = $file['name'] ?? 'voice.webm';
+
+        $ch = curl_init();
+        curl_setopt_array($ch, [
+            CURLOPT_URL            => 'https://api.openai.com/v1/audio/transcriptions',
+            CURLOPT_POST           => true,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT        => 60,
+            CURLOPT_HTTPHEADER     => [
+                'Authorization: Bearer ' . $api_key,
+            ],
+            CURLOPT_POSTFIELDS => [
+                'file'     => new CURLFile($tmp_path, $file['type'] ?? 'audio/webm', $orig_name),
+                'model'    => 'whisper-1',
+                'language' => $whisper_lang,
+                'response_format' => 'json',
+            ],
+        ]);
+
+        $response = curl_exec($ch);
+        $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        if ($http_code !== 200) {
+            $err = json_decode($response, true);
+            return new WP_REST_Response(['error' => $err['error']['message'] ?? 'Whisper failed'], 500);
+        }
+
+        $data = json_decode($response, true);
+        $text = trim($data['text'] ?? '');
+
+        if (empty($text)) {
+            return new WP_REST_Response(['error' => 'Empty transcription'], 500);
+        }
+
+        return new WP_REST_Response(['success' => true, 'text' => $text], 200);
+    }
+
+    /**
+     * POST /voice/tts
+     * Converts text → mp3 audio using OpenAI TTS
+     * Body: { text: "...", targetLang: "de" }
+     * Returns: { url: "https://..." } — saved to uploads
+     */
+    public function text_to_speech($r) {
+        $api_key = get_option('asadmindset_chatgpt_api_key', '');
+        if (empty($api_key)) {
+            return new WP_REST_Response(['error' => 'API key not configured'], 500);
+        }
+
+        $params      = $r->get_json_params();
+        $text        = sanitize_text_field($params['text'] ?? '');
+        $target_lang = sanitize_text_field($params['targetLang'] ?? 'fa');
+
+        if (empty($text)) {
+            return new WP_REST_Response(['error' => 'No text provided'], 400);
+        }
+
+        // Pick natural voice per language
+        $voice_map = [
+            'fa' => 'nova',    // Persian — warm female
+            'de' => 'onyx',    // German — deep male
+            'en' => 'alloy',
+            'fr' => 'shimmer',
+            'es' => 'echo',
+        ];
+        $voice = $voice_map[$target_lang] ?? 'nova';
+
+        $response = wp_remote_post('https://api.openai.com/v1/audio/speech', [
+            'timeout' => 30,
+            'headers' => [
+                'Content-Type'  => 'application/json',
+                'Authorization' => 'Bearer ' . $api_key,
+            ],
+            'body' => json_encode([
+                'model' => 'tts-1',
+                'input' => $text,
+                'voice' => $voice,
+                'response_format' => 'mp3',
+            ]),
+        ]);
+
+        if (is_wp_error($response)) {
+            return new WP_REST_Response(['error' => 'TTS request failed'], 500);
+        }
+
+        $http_code = wp_remote_retrieve_response_code($response);
+        if ($http_code !== 200) {
+            return new WP_REST_Response(['error' => 'TTS API error: ' . $http_code], 500);
+        }
+
+        // Save mp3 to uploads
+        $audio_data = wp_remote_retrieve_body($response);
+        $upload_dir = wp_upload_dir();
+        $filename   = 'tts_' . uniqid() . '.mp3';
+        $filepath   = $upload_dir['path'] . '/' . $filename;
+        $fileurl    = $upload_dir['url']  . '/' . $filename;
+
+        file_put_contents($filepath, $audio_data);
+
+        return new WP_REST_Response(['success' => true, 'url' => $fileurl], 200);
     }
 }
 

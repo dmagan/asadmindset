@@ -384,7 +384,7 @@ const CutifyGlassDemo = () => {
     liveChannel.bind('live-started', (data) => {
       setIsLiveActive(true);
       setLiveStreamId(data.stream_id);
-      setLiveTitle(data.title || 'لایو');
+      setLiveTitle(data.title || 'Live');
     });
     liveChannel.bind('live-ended', (data) => {
       setIsLiveActive(false);
@@ -447,7 +447,7 @@ const CutifyGlassDemo = () => {
               // هر پلن با تاخیر جداگانه نشون داده می‌شه
               data.forEach((plan, index) => {
                 const productLabel = {
-                  alpha_channel: 'کانال آلفا',
+                  alpha_channel: 'Alfa Channel',
                   academy: 'آکادمی',
                   ai_chat: 'هوش مصنوعی'
                 }[plan.product] || plan.product;
@@ -477,7 +477,7 @@ const CutifyGlassDemo = () => {
           if (data.is_live) {
             setIsLiveActive(true);
             setLiveStreamId(data.stream_id);
-            setLiveTitle(data.title || 'لایو');
+            setLiveTitle(data.title || 'Live');
           }
         })
         .catch(() => {});
@@ -1115,7 +1115,7 @@ if (activeTab === 'projects') {
               </div>
               <div className="menu-text-wrapper">
                 <span className="menu-item-title" style={{ color: '#fca5a5' }}>
-                  🔴 لایو
+                  🔴 Live
                 </span>
                 <span className="menu-item-desc" style={{ color: 'rgba(255,255,255,0.5)', fontSize: '13px' }}>
                   {liveTitle || 'الان لایو هستیم!'}
@@ -1140,9 +1140,9 @@ if (activeTab === 'projects') {
                 <Video size={24} style={{ color: '#f87171' }} />
               </div>
               <div className="menu-text-wrapper">
-                <span className="menu-item-title">مدیریت لایو</span>
+                <span className="menu-item-title">Live Manager</span>
                 <span className="menu-item-desc" style={{ color: 'rgba(255,255,255,0.4)', fontSize: '13px' }}>
-                  {isLiveActive ? '🔴 لایو فعال' : 'شروع لایو جدید'}
+                  {isLiveActive ? '🔴 Live Active' : 'Start New Live'}
                 </span>
               </div>
             </div>
@@ -1168,9 +1168,9 @@ if (activeTab === 'projects') {
               <Video size={24} />
             </div>
             <div className="menu-text-wrapper">
-              <span className="menu-item-title">لایوهای قبلی</span>
+              <span className="menu-item-title">Live Saved</span>
               <span className="menu-item-desc" style={{ color: 'rgba(255,255,255,0.4)', fontSize: '13px' }}>
-                آرشیو لایو استریم‌ها
+                Live stream archive
               </span>
             </div>
           </div>
@@ -1197,7 +1197,7 @@ if (activeTab === 'projects') {
               )}
             </div>
             <div className="menu-text-wrapper">
-              <span className="menu-item-title">Alpha Group</span>
+              <span className="menu-item-title">Alfa Channel</span>
               <span className="menu-item-desc"></span>
             </div>
           </div>
@@ -1369,7 +1369,7 @@ if (activeTab === 'projects') {
                     <span className="nav-badge">{pendingSubCount > 99 ? '99+' : pendingSubCount}</span>
                   )}
                 </div>
-                <span>{canManageSubscriptions ? 'اشتراک‌ها' : 'خریدها'}</span>
+                <span>{canManageSubscriptions ? 'Subscriptions' : 'Purchases'}</span>
               </button>
               <button 
                 className={`nav-item-ios ${activeTab === 'profile' ? 'active' : ''}`}

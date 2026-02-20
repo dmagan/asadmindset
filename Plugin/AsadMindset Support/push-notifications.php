@@ -125,6 +125,30 @@ class AsadMindset_Push_Notifications {
                 return $user && user_can($user, 'manage_options');
             },
         ]);
+
+        // Search users by name or email (admin only)
+        register_rest_route($ns, '/push/search-users', [
+            'methods'  => 'GET',
+            'callback' => [$this, 'search_users'],
+            'permission_callback' => function($r) {
+                $uid = $this->get_user_id_from_request($r);
+                if (!$uid) return false;
+                $user = get_user_by('id', $uid);
+                return $user && user_can($user, 'manage_options');
+            },
+        ]);
+
+        // Send push to multiple specific users
+        register_rest_route($ns, '/push/send-multiple', [
+            'methods'  => 'POST',
+            'callback' => [$this, 'send_multiple_push'],
+            'permission_callback' => function($r) {
+                $uid = $this->get_user_id_from_request($r);
+                if (!$uid) return false;
+                $user = get_user_by('id', $uid);
+                return $user && user_can($user, 'manage_options');
+            },
+        ]);
     }
 
     /**
@@ -611,6 +635,68 @@ class AsadMindset_Push_Notifications {
         set_transient('fcm_access_token', $data['access_token'], 3000);
 
         return $data['access_token'];
+    }
+
+    /**
+     * GET /push/search-users?q=keyword
+     * Search users by display_name, user_login, or user_email
+     */
+    public function search_users($r) {
+        $q = sanitize_text_field(trim($r->get_param('q') ?? ''));
+
+        if (strlen($q) < 2) {
+            return new WP_REST_Response([], 200);
+        }
+
+        $users = get_users([
+            'search'         => '*' . $q . '*',
+            'search_columns' => ['user_login', 'user_email', 'display_name'],
+            'number'         => 10,
+            'fields'         => ['ID', 'display_name', 'user_email', 'user_login'],
+        ]);
+
+        $result = array_map(function($u) {
+            return [
+                'id'     => (int) $u->ID,
+                'name'   => $u->display_name ?: $u->user_login,
+                'email'  => $u->user_email,
+                'login'  => $u->user_login,
+            ];
+        }, $users);
+
+        return new WP_REST_Response(array_values($result), 200);
+    }
+
+    /**
+     * POST /push/send-multiple
+     * Body: { userIds: [1,2,3], title: '...', body: '...' }
+     */
+    public function send_multiple_push($r) {
+        $params   = $r->get_json_params();
+        $user_ids = array_map('intval', $params['userIds'] ?? []);
+        $title    = sanitize_text_field($params['title'] ?? 'AsadMindset');
+        $body     = sanitize_text_field($params['body'] ?? '');
+
+        if (empty($user_ids) || !$body) {
+            return new WP_REST_Response(['message' => 'userIds and body required'], 400);
+        }
+
+        $sent = 0; $skipped = 0; $failed = 0;
+
+        foreach (array_unique($user_ids) as $uid) {
+            $result = $this->send_to_user($uid, $title, $body, ['type' => 'broadcast']);
+            if (!empty($result['skipped'])) $skipped++;
+            elseif ($result['success'])     $sent++;
+            else                            $failed++;
+        }
+
+        return new WP_REST_Response([
+            'success' => true,
+            'total'   => count(array_unique($user_ids)),
+            'sent'    => $sent,
+            'skipped' => $skipped,
+            'failed'  => $failed,
+        ], 200);
     }
 }
 

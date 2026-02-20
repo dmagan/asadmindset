@@ -42,7 +42,7 @@ export const formatRelativeTime = (dateString) => {
   if (minutes < 60) return `${minutes} دقیقه پیش`;
   if (hours < 24) return `${hours} ساعت پیش`;
   if (days < 7) return `${days} روز پیش`;
-  return date.toLocaleDateString('fa-IR');
+  return date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 };
 
 /**

@@ -89,7 +89,7 @@ const SubscriptionPage = ({ onBack, onNavigateToSupport, isRenewal = false, rene
   ];
 
   const networkOptions = [
-    { value: 'TRC20', label: 'Tron', subtitle: 'TRC20', color: '#ef4444', textColor: '#ffffff' },
+    { value: 'TRC20', label: 'Tron', subtitle: 'TRC20', color: '#f0b90b', textColor: '#ffffff' },
     { value: 'Ethereum', label: 'Ethereum', subtitle: 'ERC20', color: '#627eea' },
     { value: 'Solana', label: 'Solana', subtitle: '', color: '#14f195' },
   ];
@@ -501,7 +501,7 @@ const SubscriptionPage = ({ onBack, onNavigateToSupport, isRenewal = false, rene
                           alignItems: 'center',
                           justifyContent: 'center'
                         }}>
-                          <Check size={10} color="white" />
+                          <Check size={10} color={network.value === 'TRC20' ? '#000000' : 'white'} />
                         </div>
                       )}
                       <span style={{

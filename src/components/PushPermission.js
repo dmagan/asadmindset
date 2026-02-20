@@ -29,7 +29,7 @@ const PushPermission = ({ onClose }) => {
     // If denied previously
     if (pushService.getPermissionState() === 'denied') {
       setStatus('error');
-      setErrorMsg('اعلان‌ها توسط شما مسدود شده. لطفاً از تنظیمات مرورگر فعال کنید.');
+      setErrorMsg('نوتیفیکیشن توسط شما مسدود شده. لطفاً از تنظیمات مرورگر فعال کنید.');
       return;
     }
   }, []);
@@ -45,9 +45,9 @@ const PushPermission = ({ onClose }) => {
       setStatus('error');
       console.error('[Push] Enable failed:', e);
       if (e.message === 'Permission denied') {
-        setErrorMsg('شما دسترسی اعلان را رد کردید');
+        setErrorMsg('شما دسترسی نوتیفیکیشن را رد کردید');
       } else {
-        setErrorMsg(e.message || 'خطا در فعال‌سازی اعلان‌ها');
+        setErrorMsg(e.message || 'خطا در فعال‌سازی نوتیفیکیشن');
       }
     }
   };
@@ -57,7 +57,7 @@ const PushPermission = ({ onClose }) => {
       <div className="push-prompt">
         <div className="push-prompt-content push-success">
           <Bell size={24} className="push-icon-success" />
-          <span>اعلان‌ها فعال شد ✓</span>
+          <span>نوتیفیکیشن فعال شد ✓</span>
         </div>
         <style>{pushStyles}</style>
       </div>
@@ -105,11 +105,11 @@ const PushPermission = ({ onClose }) => {
       <div className="push-prompt-content">
         <button className="push-close" onClick={onClose}><X size={18} /></button>
         <Bell size={32} className="push-icon" />
-        <h4>دریافت اعلان پیام جدید</h4>
-        <p>برای اطلاع از پیام‌های جدید، اعلان‌ها را فعال کنید</p>
+        <h4>دریافت نوتیفیکیشن پیام جدید</h4>
+        <p>برای اطلاع از پیام‌های جدید، نوتیفیکیشن را فعال کنید</p>
         <div className="push-actions">
           <button className="push-btn-enable" onClick={handleEnable} disabled={status === 'loading'}>
-            {status === 'loading' ? 'در حال فعال‌سازی...' : '🔔 فعال‌سازی اعلان'}
+            {status === 'loading' ? 'در حال فعال‌سازی...' : '🔔 فعال‌سازی نوتیفیکیشن'}
           </button>
           <button className="push-btn-later" onClick={onClose}>بعداً</button>
         </div>

@@ -100,6 +100,37 @@ class AsadMindset_Email_Verification {
     }
 
     /**
+     * Delete unverified accounts older than 24 hours
+     * Safe: only deletes accounts where email_verified = 0 AND created > 24h ago
+     */
+    private function cleanup_unverified_accounts() {
+        global $wpdb;
+        $table_v = $wpdb->prefix . 'email_verifications';
+
+        // Find user IDs that are unverified AND have no pending verification token
+        // (token expires after 1h, so after 24h they're definitely abandoned)
+        $cutoff = gmdate('Y-m-d H:i:s', strtotime('-24 hours'));
+
+        $unverified_ids = $wpdb->get_col($wpdb->prepare(
+            "SELECT u.ID FROM {$wpdb->users} u
+             INNER JOIN {$wpdb->usermeta} um ON um.user_id = u.ID AND um.meta_key = 'email_verified' AND um.meta_value = '0'
+             WHERE u.user_registered < %s",
+            $cutoff
+        ));
+
+        if (!empty($unverified_ids)) {
+            require_once(ABSPATH . 'wp-admin/includes/user.php');
+            foreach ($unverified_ids as $uid) {
+                // Double-check: make sure not verified
+                $v = get_user_meta((int)$uid, 'email_verified', true);
+                if ($v !== '1') {
+                    wp_delete_user((int)$uid);
+                }
+            }
+        }
+    }
+
+    /**
      * Register user and send verification email
      */
     public function register_user($request) {
@@ -122,27 +153,35 @@ class AsadMindset_Email_Verification {
             return new WP_Error('weak_password', 'رمز عبور باید حداقل ۶ کاراکتر باشد.', array('status' => 400));
         }
 
-        if (username_exists($username)) {
-            return new WP_Error('username_exists', 'این نام کاربری قبلاً ثبت شده است.', array('status' => 409));
+        // ── Cleanup: delete unverified accounts older than 24h ──────────────
+        // This allows users to re-register with the same username/email if they
+        // never verified. Verified accounts are never touched.
+        $this->cleanup_unverified_accounts();
+
+        // Check if username belongs to a VERIFIED account
+        $existing_by_username = get_user_by('login', $username);
+        if ($existing_by_username) {
+            $verified_u = get_user_meta($existing_by_username->ID, 'email_verified', true);
+            if ($verified_u === '1') {
+                return new WP_Error('username_exists', 'این نام کاربری قبلاً ثبت شده است.', array('status' => 409));
+            }
+            // Unverified account with this username — delete it so we can re-register
+            require_once(ABSPATH . 'wp-admin/includes/user.php');
+            wp_delete_user($existing_by_username->ID);
         }
 
+        // Check if email belongs to a VERIFIED account
         if (email_exists($email)) {
-            // If user exists but not verified, resend
             $existing_user = get_user_by('email', $email);
             if ($existing_user) {
                 $verified = get_user_meta($existing_user->ID, 'email_verified', true);
-                if (!$verified) {
-                    $this->send_verification_email($existing_user->ID, $email);
-                    return rest_ensure_response(array(
-                        'success' => true,
-                        'message' => 'ایمیل تأیید مجدداً ارسال شد.',
-                        'userId'  => $existing_user->ID,
-                        'email'   => $email,
-                        'needsVerification' => true,
-                    ));
+                if ($verified === '1') {
+                    return new WP_Error('email_exists', 'این ایمیل قبلاً ثبت شده است.', array('status' => 409));
                 }
+                // Unverified account — delete and let them re-register fresh
+                require_once(ABSPATH . 'wp-admin/includes/user.php');
+                wp_delete_user($existing_user->ID);
             }
-            return new WP_Error('email_exists', 'این ایمیل قبلاً ثبت شده است.', array('status' => 409));
         }
 
         // Create user — set as inactive until verified

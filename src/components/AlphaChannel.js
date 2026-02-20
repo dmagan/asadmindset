@@ -1279,7 +1279,7 @@ const AlphaChannel = ({ onBack, isAdmin: isAdminProp, onUnreadCountChange }) => 
           </button>
           <div className="chat-header-info">
             <div className="chat-header-text">
-              <span className="chat-header-title">کانال آلفا</span>
+              <span className="chat-header-title">Alfa Channel</span>
               <span className="chat-header-status">در حال بارگذاری...</span>
             </div>
             <div className="chat-avatar-glass" style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)' }}>
@@ -1303,7 +1303,7 @@ const AlphaChannel = ({ onBack, isAdmin: isAdminProp, onUnreadCountChange }) => 
         </button>
         <div className="chat-header-info">
           <div className="chat-header-text">
-            <span className="chat-header-title">کانال آلفا</span>
+            <span className="chat-header-title">Alfa Channel</span>
           </div>
           <div className="chat-avatar-glass channel-avatar-img-container">
             <img src="/channel-avatar.jpg" alt="Alfa Group" className="channel-avatar-img" />
