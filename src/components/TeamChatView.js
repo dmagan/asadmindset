@@ -201,6 +201,9 @@ const TeamChatView = ({ conversationId, onBack, onUnreadCountChange }) => {
           video: msg.type === 'video' ? msg.mediaUrl : null,
           audio: msg.type === 'audio' ? msg.mediaUrl : null,
           duration: msg.duration || 0,
+          translatedVoice: msg.type === 'audio' && !!msg.translatedVoice,
+          content: msg.type === 'audio' ? (msg.content || null) : null,
+          originalText: msg.type === 'audio' ? (msg.originalText || null) : (msg.type === 'text' ? msg.content : null),
           senderId: msg.senderId,
           senderName: msg.senderName,
           sender: msg.senderId === currentUserId ? 'user' : 'support',
@@ -345,6 +348,9 @@ const TeamChatView = ({ conversationId, onBack, onUnreadCountChange }) => {
           senderLang: data.senderLang || 'fa',
           image: data.type === 'image' ? data.mediaUrl : null, video: data.type === 'video' ? data.mediaUrl : null,
           audio: data.type === 'audio' ? data.mediaUrl : null, duration: data.duration || 0,
+          translatedVoice: data.type === 'audio' && !!data.translatedVoice,
+          content: data.type === 'audio' ? (data.content || null) : null,
+          originalText: data.type === 'audio' ? (data.originalText || null) : null,
           senderId: data.senderId, senderName: data.senderName,
           sender: 'support',
           time: fmtTime(data.createdAt), edited: false, status: 'sent', showOriginal: false,
@@ -616,6 +622,7 @@ const TeamChatView = ({ conversationId, onBack, onUnreadCountChange }) => {
   };
 
   // ─── Voice Recording ───
+  // Pipeline: record → STT (Whisper) → translate → TTS → send
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -630,24 +637,98 @@ const TeamChatView = ({ conversationId, onBack, onUnreadCountChange }) => {
         setRecordingTime(0);
         const tempId = Date.now(); const time = fmtTime(new Date().toISOString()); const reply = replyingTo;
         const url = URL.createObjectURL(blob);
+        // sourceLang = my language (from my flag)
+        // targetLang = other member's language (from server)
+        const myLang = selectedFlag ? flagLangMap[selectedFlag.code] : 'fa';
+        const sourceLang = myLang;
+        // Find other member's lang from conversation members
+        const otherMember = conversation?.members?.find(m => m.userId !== currentUserId);
+        const otherLang = otherMember?.lang || (myLang === 'fa' ? 'de' : 'fa');
+        const targetLang = otherLang;
+        const needTranslation = sourceLang !== targetLang;
+        console.log('[Voice] sourceLang:', sourceLang, '| targetLang:', targetLang, '| otherMember lang:', otherMember?.lang, '| needTranslation:', needTranslation);
+
+        // Show as sending immediately
         setMessages(p => [...p, { id: tempId, audio: url, duration: dur, sender: 'user', senderId: currentUserId, time, status: 'sending', replyTo: reply }]);
         pendingTempIds.current.add(tempId);
         setReplyingTo(null);
+
         try {
           const token = authService.getToken();
           const ext = mr.mimeType.includes('webm') ? 'webm' : 'm4a';
-          const fd = new FormData();
-          fd.append('file', new File([blob], `voice_${Date.now()}.${ext}`, { type: mr.mimeType }));
-          const up = await fetch(`${API_URL}/admin/upload`, { method: 'POST', headers: { 'Authorization': `Bearer ${token}` }, body: fd });
-          if (!up.ok) throw new Error('Upload failed');
-          const upData = await up.json();
-          const msgRes = await fetch(`${API_URL}/team/conversations/${conversationId}/message`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-            body: JSON.stringify({ type: 'audio', mediaUrl: upData.url, duration: dur, replyToId: reply?.id })
-          });
-          const msgData = await msgRes.json();
-          pendingTempIds.current.delete(tempId);
-          setMessages(p => p.map(m => m.id === tempId ? { ...m, id: msgData.message.id, audio: upData.url, status: 'sent' } : m));
+
+          if (needTranslation) {
+            // ── Pipeline: STT → Translate → TTS → send translated audio ──
+            // Step 1: Speech-to-Text (Whisper) — transcribe in my language
+            const sttFd = new FormData();
+            sttFd.append('file', new File([blob], `voice_${Date.now()}.${ext}`, { type: mr.mimeType }));
+            sttFd.append('sourceLang', sourceLang);
+            const sttRes = await fetch(`${API_URL}/voice/stt`, {
+              method: 'POST', headers: { 'Authorization': `Bearer ${token}` }, body: sttFd
+            });
+            if (!sttRes.ok) throw new Error('STT failed');
+            const sttData = await sttRes.json();
+            const originalText = sttData.text;
+
+            // Step 2: Translate to target language
+            const transRes = await fetch(`${API_URL}/translate`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+              body: JSON.stringify({ text: originalText, targetLang: targetLang })
+            });
+            const transData = await transRes.json();
+            const translatedText = transData.translated || originalText;
+
+            // Step 3: TTS — convert translated text → audio in target language
+            const ttsRes = await fetch(`${API_URL}/voice/tts`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+              body: JSON.stringify({ text: translatedText, targetLang: targetLang })
+            });
+            if (!ttsRes.ok) throw new Error('TTS failed');
+            const ttsData = await ttsRes.json();
+
+            // Step 4: Send translated audio + both texts
+            const msgRes = await fetch(`${API_URL}/team/conversations/${conversationId}/message`, {
+              method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+              body: JSON.stringify({
+                type: 'audio',
+                mediaUrl: ttsData.url,
+                duration: dur,
+                replyToId: reply?.id,
+                content: translatedText,      // translated text
+                senderLang: sourceLang,
+                translatedVoice: true,
+                originalText: originalText,   // original text
+              })
+            });
+            const msgData = await msgRes.json();
+            pendingTempIds.current.delete(tempId);
+            setMessages(p => p.map(m => m.id === tempId ? {
+              ...m,
+              id: msgData.message.id,
+              audio: ttsData.url,
+              status: 'sent',
+              content: translatedText,
+              originalText: originalText,
+              translatedVoice: true,
+            } : m));
+
+          } else {
+            // ── Normal flow: no translation needed ──
+            const fd = new FormData();
+            fd.append('file', new File([blob], `voice_${Date.now()}.${ext}`, { type: mr.mimeType }));
+            const up = await fetch(`${API_URL}/admin/upload`, { method: 'POST', headers: { 'Authorization': `Bearer ${token}` }, body: fd });
+            if (!up.ok) throw new Error('Upload failed');
+            const upData = await up.json();
+            const msgRes = await fetch(`${API_URL}/team/conversations/${conversationId}/message`, {
+              method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+              body: JSON.stringify({ type: 'audio', mediaUrl: upData.url, duration: dur, replyToId: reply?.id })
+            });
+            const msgData = await msgRes.json();
+            pendingTempIds.current.delete(tempId);
+            setMessages(p => p.map(m => m.id === tempId ? { ...m, id: msgData.message.id, audio: upData.url, status: 'sent' } : m));
+          }
         } catch(e) { setMessages(p => p.filter(m => m.id !== tempId)); }
       };
       mr.start();
@@ -802,8 +883,26 @@ const TeamChatView = ({ conversationId, onBack, onUnreadCountChange }) => {
             {flags.map(flag => (
               <button
                 key={flag.code}
-                onTouchEnd={(e) => { e.preventDefault(); e.stopPropagation(); setSelectedFlag(flag); selectedFlagRef.current = flag; localStorage.setItem('teamchat_flag', JSON.stringify(flag)); setShowFlagMenu(false); }}
-                onClick={() => { setSelectedFlag(flag); selectedFlagRef.current = flag; localStorage.setItem('teamchat_flag', JSON.stringify(flag)); setShowFlagMenu(false); }}
+                onTouchEnd={(e) => { 
+                  e.preventDefault(); e.stopPropagation(); 
+                  setSelectedFlag(flag); 
+                  selectedFlagRef.current = flag; 
+                  localStorage.setItem('teamchat_flag', JSON.stringify(flag)); 
+                  setShowFlagMenu(false);
+                  const lang = flagLangMap[flag.code] || 'fa';
+                  const token = authService.getToken();
+                  fetch(`${API_URL}/team/set-lang`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify({ lang }) }).catch(()=>{});
+                }}
+                onClick={() => { 
+                  setSelectedFlag(flag); 
+                  selectedFlagRef.current = flag; 
+                  localStorage.setItem('teamchat_flag', JSON.stringify(flag)); 
+                  setShowFlagMenu(false);
+                  // Save lang to server
+                  const lang = flagLangMap[flag.code] || 'fa';
+                  const token = authService.getToken();
+                  fetch(`${API_URL}/team/set-lang`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify({ lang }) }).catch(()=>{});
+                }}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -901,42 +1000,65 @@ const TeamChatView = ({ conversationId, onBack, onUnreadCountChange }) => {
                 onClick={(e) => { e.stopPropagation(); setZoomedImage(msg.image); }} 
               />
             ) : msg.audio ? (
-              <div className={`audio-message ${playingAudioId === msg.id ? 'playing' : ''}`}>
-                <button 
-                  className="audio-play-btn"
-                  onClick={(e) => { e.stopPropagation(); toggleAudioPlay(msg.id, msg.audio); }}
-                >
-                  {playingAudioId === msg.id ? <Pause size={20} /> : <Play size={20} />}
-                </button>
-                <div className="audio-wave">
-                  <div className="audio-wave-bar"></div>
-                  <div className="audio-wave-bar"></div>
-                  <div className="audio-wave-bar"></div>
-                  <div className="audio-wave-bar"></div>
-                  <div className="audio-wave-bar"></div>
-                  <div className="audio-wave-bar"></div>
-                  <div className="audio-wave-bar"></div>
-                  <div className="audio-wave-bar"></div>
-                </div>
-                <span className="audio-duration">
-                  {playingAudioId === msg.id 
-                    ? `${fmtDuration(Math.floor(audioCurrentTime))} / ${fmtDuration(Math.floor(audioRefs.current[msg.id]?.duration || msg.duration || 0))}`
-                    : fmtDuration(Math.floor(audioRefs.current[msg.id]?.duration || msg.duration || 0))
-                  }
-                </span>
-                {playingAudioId === msg.id && (
-                  <button className="audio-speed-btn" onClick={(e) => toggleSpeed(e, msg.id)}>
-                    {playbackSpeed}x
+              <>
+                <div className={`audio-message ${playingAudioId === msg.id ? 'playing' : ''}`}>
+                  <button 
+                    className="audio-play-btn"
+                    onClick={(e) => { e.stopPropagation(); toggleAudioPlay(msg.id, msg.audio); }}
+                  >
+                    {playingAudioId === msg.id ? <Pause size={20} /> : <Play size={20} />}
                   </button>
+                  <div className="audio-wave">
+                    <div className="audio-wave-bar"></div>
+                    <div className="audio-wave-bar"></div>
+                    <div className="audio-wave-bar"></div>
+                    <div className="audio-wave-bar"></div>
+                    <div className="audio-wave-bar"></div>
+                    <div className="audio-wave-bar"></div>
+                    <div className="audio-wave-bar"></div>
+                    <div className="audio-wave-bar"></div>
+                  </div>
+                  <span className="audio-duration">
+                    {playingAudioId === msg.id 
+                      ? `${fmtDuration(Math.floor(audioCurrentTime))} / ${fmtDuration(Math.floor(audioRefs.current[msg.id]?.duration || msg.duration || 0))}`
+                      : fmtDuration(Math.floor(audioRefs.current[msg.id]?.duration || msg.duration || 0))
+                    }
+                  </span>
+                  {playingAudioId === msg.id && (
+                    <button className="audio-speed-btn" onClick={(e) => toggleSpeed(e, msg.id)}>
+                      {playbackSpeed}x
+                    </button>
+                  )}
+                  <audio 
+                    ref={el => audioRefs.current[msg.id] = el} 
+                    src={msg.audio} 
+                    preload="metadata"
+                    onTimeUpdate={(e) => setAudioCurrentTime(e.target.currentTime)}
+                    onEnded={() => { setPlayingAudioId(null); setAudioCurrentTime(0); setPlaybackSpeed(1); }} 
+                  />
+                </div>
+
+                {/* Translated voice: show both original and translated text */}
+                {msg.translatedVoice && (
+                  <div style={{
+                    marginTop: 8, padding: '8px 12px',
+                    background: 'rgba(255,255,255,0.06)',
+                    borderRadius: 10, fontSize: 12,
+                    borderRight: '2px solid rgba(167,139,250,0.5)',
+                  }}>
+                    {msg.content && (
+                      <p style={{ color: 'rgba(255,255,255,0.8)', margin: '0 0 4px', lineHeight: 1.6 }}>
+                        🌐 {msg.content}
+                      </p>
+                    )}
+                    {msg.originalText && (
+                      <p style={{ color: 'rgba(255,255,255,0.35)', margin: 0, lineHeight: 1.6, direction: 'ltr', textAlign: 'left' }}>
+                        {msg.originalText}
+                      </p>
+                    )}
+                  </div>
                 )}
-                <audio 
-                  ref={el => audioRefs.current[msg.id] = el} 
-                  src={msg.audio} 
-                  preload="metadata"
-                  onTimeUpdate={(e) => setAudioCurrentTime(e.target.currentTime)}
-                  onEnded={() => { setPlayingAudioId(null); setAudioCurrentTime(0); setPlaybackSpeed(1); }} 
-                />
-              </div>
+              </>
             ) : (
               <span className="bubble-text">{(() => {
                 if (msg.sender === 'user') return msg.text;
