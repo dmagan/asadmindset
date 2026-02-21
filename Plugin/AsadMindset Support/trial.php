@@ -557,7 +557,8 @@ class AsadMindset_Trial {
 }
 
 // ── Hook registration ──
-add_action('user_register', ['AsadMindset_Trial', 'grant_on_register'], 20, 1);
+// Trial is now granted after email verification, not on registration
+// add_action('user_register', ['AsadMindset_Trial', 'grant_on_register'], 20, 1);
 add_action('rest_api_init', ['AsadMindset_Trial', 'register_routes']);
 
 // ── Create table on load (safe with IF NOT EXISTS) ──

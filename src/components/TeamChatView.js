@@ -93,6 +93,9 @@ const TeamChatView = ({ conversationId, onBack, onUnreadCountChange }) => {
   const observerRef = useRef(null);
 
   // Refs
+  const conversationRef = useRef(conversation);
+  useEffect(() => { conversationRef.current = conversation; }, [conversation]);
+
   const messagesEndRef = useRef(null);
   const messagesAreaRef = useRef(null);
   const inputRef = useRef(null);
@@ -194,16 +197,17 @@ const TeamChatView = ({ conversationId, onBack, onUnreadCountChange }) => {
         return {
           id: msg.id,
           text: msg.type === 'text' ? msg.content : null,
-          translatedText: msg.translatedContent || null,
-          originalText: msg.type === 'text' ? msg.content : null,
+          translatedText: msg.type === 'text' ? (msg.translatedContent || null) : null,
           senderLang: msg.senderLang || 'fa',
           image: msg.type === 'image' ? msg.mediaUrl : null,
           video: msg.type === 'video' ? msg.mediaUrl : null,
           audio: msg.type === 'audio' ? msg.mediaUrl : null,
           duration: msg.duration || 0,
-          translatedVoice: msg.type === 'audio' && !!msg.translatedVoice,
+          translatedVoice: msg.type === 'audio' && (!!msg.translatedVoice || !!msg.translated_voice),
           content: msg.type === 'audio' ? (msg.content || null) : null,
-          originalText: msg.type === 'audio' ? (msg.originalText || null) : (msg.type === 'text' ? msg.content : null),
+          originalText: msg.type === 'audio' ? (msg.originalText || msg.original_text || null) : (msg.type === 'text' ? msg.content : null),
+          originalAudioUrl: msg.originalAudioUrl || msg.original_audio_url || null,
+          showOriginalAudio: false,
           senderId: msg.senderId,
           senderName: msg.senderName,
           sender: msg.senderId === currentUserId ? 'user' : 'support',
@@ -327,12 +331,20 @@ const TeamChatView = ({ conversationId, onBack, onUnreadCountChange }) => {
     channelRef.current.bind('new-message', (data) => {
       const isMe = data.senderId === currentUserId;
       if (isMe) {
-        // اگه پیام خودمونه: یا tempId رو replace کن، یا اگه قبلاً replace شده ignore کن
+        // پیام خودمونه: tempId رو replace کن ولی فیلدهای محتوا رو از state حفظ کن
         if (pendingTempIds.current.size > 0) {
           const tid = Array.from(pendingTempIds.current)[0];
           setMessages(prev => {
             if (prev.some(m => m.id === data.id)) return prev;
-            if (prev.some(m => m.id === tid)) { pendingTempIds.current.delete(tid); return prev.map(m => m.id === tid ? { ...m, id: data.id, status: 'delivered' } : m); }
+            if (prev.some(m => m.id === tid)) {
+              pendingTempIds.current.delete(tid);
+              return prev.map(m => m.id === tid ? {
+                ...m,           // حفظ همه فیلدهای موجود (audio, content, originalText, translatedVoice, ...)
+                id: data.id,    // فقط id رو آپدیت کن
+                // status رو از state حفظ کن — اگه قبلاً delivered شده، همون بمونه
+                status: m.status === 'delivered' || m.status === 'read' ? m.status : 'delivered',
+              } : m);
+            }
             return prev;
           });
         }
@@ -343,14 +355,16 @@ const TeamChatView = ({ conversationId, onBack, onUnreadCountChange }) => {
         if (prev.some(m => m.id === data.id)) return prev;
         return [...prev, {
           id: data.id, text: data.type === 'text' ? data.content : null,
-          translatedText: data.translatedContent || null,
+          translatedText: data.type === 'text' ? (data.translatedContent || null) : null,
           originalText: data.type === 'text' ? data.content : null,
           senderLang: data.senderLang || 'fa',
           image: data.type === 'image' ? data.mediaUrl : null, video: data.type === 'video' ? data.mediaUrl : null,
           audio: data.type === 'audio' ? data.mediaUrl : null, duration: data.duration || 0,
-          translatedVoice: data.type === 'audio' && !!data.translatedVoice,
+          translatedVoice: data.type === 'audio' && (!!data.translatedVoice || !!data.translated_voice),
           content: data.type === 'audio' ? (data.content || null) : null,
-          originalText: data.type === 'audio' ? (data.originalText || null) : null,
+          originalText: data.type === 'audio' ? (data.originalText || data.original_text || null) : null,
+          originalAudioUrl: data.originalAudioUrl || data.original_audio_url || null,
+          showOriginalAudio: false,
           senderId: data.senderId, senderName: data.senderName,
           sender: 'support',
           time: fmtTime(data.createdAt), edited: false, status: 'sent', showOriginal: false,
@@ -381,6 +395,25 @@ const TeamChatView = ({ conversationId, onBack, onUnreadCountChange }) => {
 
     channelRef.current.bind('message-edited', (d) => setMessages(p => p.map(m => m.id === d.id ? { ...m, text: d.content, edited: true } : m)));
     channelRef.current.bind('message-deleted', (d) => setMessages(p => p.filter(m => m.id !== d.id)));
+
+    // ── تیک دوم: ترجمه تموم شد → بلافاصله UI آپدیت می‌شه ──
+    channelRef.current.bind('message-translated', (d) => {
+      setMessages(p => p.map(m => {
+        if (m.id !== d.id) return m;
+        return {
+          ...m,
+          // متن ترجمه‌شده (برای پیام‌های متنی)
+          translatedText: d.translatedContent || m.translatedText,
+          // برای پیام‌های صوتی: متن اصلی و ترجمه‌شده
+          content: d.type === 'audio' ? (d.content || m.content) : m.content,
+          originalText: d.originalText || m.originalText,
+          originalAudioUrl: d.originalAudioUrl || m.originalAudioUrl,
+          translatedVoice: d.translatedVoice || m.translatedVoice,
+          // آپدیت status به delivered (تیک دوم)
+          status: m.status === 'read' ? 'read' : 'delivered',
+        };
+      }));
+    });
     
     // Read receipt: when other user reads messages, update status to 'read'
     channelRef.current.bind('messages-read', (d) => {
@@ -408,6 +441,18 @@ const TeamChatView = ({ conversationId, onBack, onUnreadCountChange }) => {
     channelRef.current.bind('member-added', () => loadConversation());
     channelRef.current.bind('member-removed', () => loadConversation());
     channelRef.current.bind('member-left', () => loadConversation());
+    channelRef.current.bind('member-lang-changed', (data) => {
+      // Update other member's lang in conversation state immediately - no reload needed
+      setConversation(prev => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          members: prev.members?.map(m =>
+            m.userId === data.userId ? { ...m, lang: data.lang } : m
+          )
+        };
+      });
+    });
     channelRef.current.bind('conversation-updated', (d) => setConversation(p => ({ ...p, ...d })));
   };
 
@@ -642,14 +687,14 @@ const TeamChatView = ({ conversationId, onBack, onUnreadCountChange }) => {
         const myLang = selectedFlag ? flagLangMap[selectedFlag.code] : 'fa';
         const sourceLang = myLang;
         // Find other member's lang from conversation members
-        const otherMember = conversation?.members?.find(m => m.userId !== currentUserId);
+        const otherMember = conversationRef.current?.members?.find(m => m.userId !== currentUserId);
         const otherLang = otherMember?.lang || (myLang === 'fa' ? 'de' : 'fa');
         const targetLang = otherLang;
         const needTranslation = sourceLang !== targetLang;
         console.log('[Voice] sourceLang:', sourceLang, '| targetLang:', targetLang, '| otherMember lang:', otherMember?.lang, '| needTranslation:', needTranslation);
 
-        // Show as sending immediately
-        setMessages(p => [...p, { id: tempId, audio: url, duration: dur, sender: 'user', senderId: currentUserId, time, status: 'sending', replyTo: reply }]);
+        // Show as sending immediately - store original blob url for sender
+        setMessages(p => [...p, { id: tempId, audio: url, originalAudio: url, duration: dur, sender: 'user', senderId: currentUserId, time, status: 'sending', replyTo: reply }]);
         pendingTempIds.current.add(tempId);
         setReplyingTo(null);
 
@@ -658,8 +703,9 @@ const TeamChatView = ({ conversationId, onBack, onUnreadCountChange }) => {
           const ext = mr.mimeType.includes('webm') ? 'webm' : 'm4a';
 
           if (needTranslation) {
-            // ── Pipeline: STT → Translate → TTS → send translated audio ──
-            // Step 1: Speech-to-Text (Whisper) — transcribe in my language
+            // ── Pipeline: STT → LLM (correct + translate in one call) → TTS → send ──
+
+            // Step 1: Speech-to-Text (Whisper)
             const sttFd = new FormData();
             sttFd.append('file', new File([blob], `voice_${Date.now()}.${ext}`, { type: mr.mimeType }));
             sttFd.append('sourceLang', sourceLang);
@@ -668,16 +714,25 @@ const TeamChatView = ({ conversationId, onBack, onUnreadCountChange }) => {
             });
             if (!sttRes.ok) throw new Error('STT failed');
             const sttData = await sttRes.json();
-            const originalText = sttData.text;
+            const rawText = sttData.text;
 
-            // Step 2: Translate to target language
-            const transRes = await fetch(`${API_URL}/translate`, {
+            // ✅ Step 1 done: audio reached server → show one tick (sent)
+            setMessages(p => p.map(m => m.id === tempId ? { ...m, status: 'sent' } : m));
+
+            // Step 2: Single LLM call — correct source text + translate to target
+            const llmRes = await fetch(`${API_URL}/translate`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-              body: JSON.stringify({ text: originalText, targetLang: targetLang })
+              body: JSON.stringify({
+                text: rawText,
+                sourceLang: sourceLang,
+                targetLang: targetLang,
+                correctAndTranslate: true,
+              })
             });
-            const transData = await transRes.json();
-            const translatedText = transData.translated || originalText;
+            const llmData = await llmRes.json();
+            const originalText = llmData.corrected || rawText;   // corrected source (e.g. clean Farsi)
+            const translatedText = llmData.translated || rawText; // translated target (e.g. German)
 
             // Step 3: TTS — convert translated text → audio in target language
             const ttsRes = await fetch(`${API_URL}/voice/tts`, {
@@ -688,7 +743,16 @@ const TeamChatView = ({ conversationId, onBack, onUnreadCountChange }) => {
             if (!ttsRes.ok) throw new Error('TTS failed');
             const ttsData = await ttsRes.json();
 
-            // Step 4: Send translated audio + both texts
+            // Step 4: Upload original blob audio to server
+            let originalAudioUrl = null;
+            try {
+              const origFd = new FormData();
+              origFd.append('file', new File([blob], `orig_voice_${Date.now()}.${ext}`, { type: mr.mimeType }));
+              const origUp = await fetch(`${API_URL}/admin/upload`, { method: 'POST', headers: { 'Authorization': `Bearer ${token}` }, body: origFd });
+              if (origUp.ok) { const origData = await origUp.json(); originalAudioUrl = origData.url; }
+            } catch(e) { console.warn('Original audio upload failed:', e); }
+
+            // Step 5: Send translated audio + original audio url + both texts
             const msgRes = await fetch(`${API_URL}/team/conversations/${conversationId}/message`, {
               method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
               body: JSON.stringify({
@@ -696,19 +760,24 @@ const TeamChatView = ({ conversationId, onBack, onUnreadCountChange }) => {
                 mediaUrl: ttsData.url,
                 duration: dur,
                 replyToId: reply?.id,
-                content: translatedText,      // translated text
+                content: translatedText,
                 senderLang: sourceLang,
                 translatedVoice: true,
-                originalText: originalText,   // original text
+                originalText: originalText,
+                originalAudioUrl: originalAudioUrl,
               })
             });
             const msgData = await msgRes.json();
             pendingTempIds.current.delete(tempId);
+            // ✅ Step 5 done: translated audio sent to user → show two ticks + full UI update
             setMessages(p => p.map(m => m.id === tempId ? {
               ...m,
               id: msgData.message.id,
               audio: ttsData.url,
-              status: 'sent',
+              originalAudio: originalAudioUrl || url,
+              originalAudioUrl: originalAudioUrl,
+              showOriginalAudio: false,
+              status: 'delivered',
               content: translatedText,
               originalText: originalText,
               translatedVoice: true,
@@ -1031,14 +1100,19 @@ const TeamChatView = ({ conversationId, onBack, onUnreadCountChange }) => {
                   )}
                   <audio 
                     ref={el => audioRefs.current[msg.id] = el} 
-                    src={msg.audio} 
+                    src={(() => {
+                      if (!msg.translatedVoice) return msg.audio;
+                      const origUrl = msg.originalAudioUrl || msg.originalAudio;
+                      if (msg.showOriginalAudio && origUrl) return origUrl;
+                      return msg.audio;
+                    })()} 
                     preload="metadata"
                     onTimeUpdate={(e) => setAudioCurrentTime(e.target.currentTime)}
                     onEnded={() => { setPlayingAudioId(null); setAudioCurrentTime(0); setPlaybackSpeed(1); }} 
                   />
                 </div>
 
-                {/* Translated voice: show both original and translated text */}
+                {/* Translated voice: show texts + toggle for sender */}
                 {msg.translatedVoice && (
                   <div style={{
                     marginTop: 8, padding: '8px 12px',
@@ -1046,6 +1120,38 @@ const TeamChatView = ({ conversationId, onBack, onUnreadCountChange }) => {
                     borderRadius: 10, fontSize: 12,
                     borderRight: '2px solid rgba(167,139,250,0.5)',
                   }}>
+                    {/* Toggle button - for BOTH sides when originalAudioUrl exists */}
+                    {(msg.originalAudioUrl || msg.originalAudio) && (() => {
+                      const isSender = msg.sender === 'user';
+                      const handleToggle = () => {
+                        if (playingAudioId === msg.id) { audioRefs.current[msg.id]?.pause(); setPlayingAudioId(null); setAudioCurrentTime(0); }
+                        setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, showOriginalAudio: !m.showOriginalAudio } : m));
+                      };
+                      return (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleToggle(); }}
+                          onTouchEnd={(e) => { e.preventDefault(); e.stopPropagation(); handleToggle(); }}
+                          style={{
+                            display: 'flex', alignItems: 'center', gap: 6,
+                            background: msg.showOriginalAudio
+                              ? 'linear-gradient(135deg, rgba(99,102,241,0.25), rgba(167,139,250,0.2))'
+                              : 'linear-gradient(135deg, rgba(16,185,129,0.25), rgba(5,150,105,0.2))',
+                            border: `1.5px solid ${msg.showOriginalAudio ? 'rgba(167,139,250,0.6)' : 'rgba(16,185,129,0.6)'}`,
+                            borderRadius: 10, padding: '6px 14px', marginBottom: 8,
+                            color: msg.showOriginalAudio ? '#a78bfa' : '#10b981',
+                            fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                            WebkitTapHighlightColor: 'transparent',
+                            boxShadow: msg.showOriginalAudio
+                              ? '0 2px 10px rgba(167,139,250,0.2)'
+                              : '0 2px 10px rgba(16,185,129,0.2)',
+                            transition: 'all 0.2s',
+                          }}
+                        >
+                          <Languages size={14} />
+                          {msg.showOriginalAudio ? (isSender ? 'صدای خودم' : 'صدای اصلی') : 'صدای ترجمه'}
+                        </button>
+                      );
+                    })()}
                     {msg.content && (
                       <p style={{ color: 'rgba(255,255,255,0.8)', margin: '0 0 4px', lineHeight: 1.6 }}>
                         🌐 {msg.content}
@@ -1085,10 +1191,11 @@ const TeamChatView = ({ conversationId, onBack, onUnreadCountChange }) => {
               <span style={{ display: 'block', fontSize: '10px', color: 'hsla(0,0%,50%,1)', marginTop: 2, fontWeight: 600 }}>{msg.senderName}</span>
             )}
           </div>
-          {msg.sender !== 'user' && msg.translatedText && (
+          {msg.translatedText && (
             <button
               onTouchEnd={(e) => { e.preventDefault(); e.stopPropagation(); setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, showOriginal: !m.showOriginal } : m)); }}
               onClick={(e) => { e.stopPropagation(); setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, showOriginal: !m.showOriginal } : m)); }}
+              title={msg.showOriginal ? 'نمایش ترجمه' : 'نمایش متن اصلی'}
               style={{
                 background: 'none',
                 border: 'none',
